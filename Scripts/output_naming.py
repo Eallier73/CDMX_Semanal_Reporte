@@ -7,11 +7,26 @@ from pathlib import Path
 
 def _normalize_date_label(run_date: str | date | datetime | None, fallback: str) -> str:
     if isinstance(run_date, datetime):
-        return run_date.strftime("%Y-%m-%d")
+        iso = run_date.isocalendar()
+        return f"{iso.year}_W{iso.week:02d}"
     if isinstance(run_date, date):
-        return run_date.isoformat()
+        iso = run_date.isocalendar()
+        return f"{iso.year}_W{iso.week:02d}"
     if run_date:
-        return str(run_date)
+        raw = str(run_date).strip()
+        try:
+            dt = datetime.strptime(raw, "%Y-%m-%d")
+            iso = dt.date().isocalendar()
+            return f"{iso.year}_W{iso.week:02d}"
+        except ValueError:
+            pass
+        m = re.match(r"^(\d{4})[-_]?W(\d{1,2})$", raw, flags=re.IGNORECASE)
+        if m:
+            year = int(m.group(1))
+            week = int(m.group(2))
+            if 1 <= week <= 53:
+                return f"{year}_W{week:02d}"
+        return raw
     return fallback
 
 

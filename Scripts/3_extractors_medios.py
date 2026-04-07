@@ -1180,40 +1180,29 @@ def main():
     print(f"  COSTO: $0 (RSS gratuito)")
     print("#" * 60)
 
-    semanas = list(iterar_semanas(fecha_inicio_global, fecha_fin_global))
-    print(f"Semanas a procesar: {len(semanas)}")
-
     queries_ejemplo = generar_queries(MEDIOS, TERMINOS, modo=MODO_QUERIES)
-    print(f"Queries por semana: {len(queries_ejemplo)}")
-    print(f"Total requests RSS estimados: {len(queries_ejemplo) * len(semanas)}")
+    print(f"Queries para el rango: {len(queries_ejemplo)}")
+    print(f"Total requests RSS estimados: {len(queries_ejemplo)}")
 
-    resultados = []
-    errores = []
+    print("\n" + "#" * 60)
+    print(f"RANGO ÚNICO: {fecha_inicio_global} -> {fecha_fin_global}")
+    print("#" * 60)
 
-    for idx, (inicio, fin) in enumerate(semanas, 1):
-        print("\n" + "#" * 60)
-        print(f"SEMANA {idx}/{len(semanas)}: {inicio} -> {fin}")
-        print("#" * 60)
+    _, archivo_salida, _ = rutas_salida_semana(fecha_inicio_global, fecha_fin_global)
+    if OMITIR_SEMANAS_EXISTENTES and archivo_salida.exists():
+        print(f"↷ Rango omitido (ya existe CSV): {archivo_salida}")
+        df = pd.read_csv(archivo_salida, encoding="utf-8-sig")
+        _cerrar_playwright()
+        return df
 
-        carpeta_semana, archivo_salida, _ = rutas_salida_semana(inicio, fin)
-        if OMITIR_SEMANAS_EXISTENTES and archivo_salida.exists():
-            print(f"↷ Semana omitida (ya existe CSV): {archivo_salida}")
-            continue
-
-        try:
-            df_semana = procesar_semana(inicio, fin)
-            resultados.append(df_semana)
-        except Exception as exc:
-            errores.append((inicio, fin, str(exc)))
-            print(f"⚠ Error en semana {inicio} -> {fin}: {exc}")
+    try:
+        df = procesar_semana(fecha_inicio_global, fecha_fin_global)
+    except Exception as exc:
+        _cerrar_playwright()
+        raise SystemExit(f"⚠ Error en rango {fecha_inicio_global} -> {fecha_fin_global}: {exc}")
 
     # Cerrar Playwright si se usó
     _cerrar_playwright()
-
-    if errores:
-        print("\n--- ERRORES ---")
-        for inicio, fin, err in errores:
-            print(f"  {inicio} -> {fin}: {err}")
 
     print(f"\n{'=' * 60}")
     print(f"  RSS requests reales: {RSS_CALLS_REALES}")
@@ -1225,9 +1214,7 @@ def main():
     print(f"  Costo total: $0")
     print(f"{'=' * 60}")
 
-    if resultados:
-        return pd.concat(resultados, ignore_index=True)
-    return pd.DataFrame()
+    return df if df is not None else pd.DataFrame()
 
 
 if __name__ == "__main__":

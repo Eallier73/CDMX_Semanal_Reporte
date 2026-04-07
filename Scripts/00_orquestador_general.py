@@ -14,6 +14,7 @@ import argparse
 import getpass
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -38,13 +39,14 @@ from queries_config import (
     MEDIOS_SEARCH_TERMS,
     FACEBOOK_PAGES,
 )
+from output_naming import build_report_tag
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "Scripts"
 
-DEFAULT_GLOBAL_BEFORE = date.today().isoformat()
-DEFAULT_GLOBAL_SINCE = (date.today() - timedelta(days=7)).isoformat()
+_today_iso = date.today().isocalendar()
+DEFAULT_GLOBAL_ISO_WEEK = f"{_today_iso.year}-W{_today_iso.week:02d}"
 
 # Usar configuración centralizada (desde queries_config.py)
 DEFAULT_YOUTUBE_CHANNELS = YOUTUBE_CHANNELS
@@ -188,11 +190,38 @@ def append_optional(cmd: list[str], flag: str, value: str | int | float | None) 
     cmd.extend([flag, str(value)])
 
 
+def parse_iso_week(value: str) -> tuple[int, int]:
+    raw = (value or "").strip().upper().replace("_", "-")
+    if "-W" in raw:
+        year_str, week_str = raw.split("-W", 1)
+    else:
+        parts = raw.split("-")
+        if len(parts) != 2:
+            raise ValueError("Formato inválido. Usa YYYY-Www, por ejemplo 2026-W14")
+        year_str, week_str = parts[0], parts[1]
+    year = int(year_str)
+    week = int(week_str)
+    if week < 1 or week > 53:
+        raise ValueError("Semana ISO inválida. Debe estar entre 1 y 53.")
+    date.fromisocalendar(year, week, 1)
+    return year, week
+
+
+def iso_week_to_range(value: str) -> tuple[str, str]:
+    year, week = parse_iso_week(value)
+    since = date.fromisocalendar(year, week, 1)
+    before = date.fromisocalendar(year, week, 7)
+    return since.isoformat(), before.isoformat()
+
+
 def prompt_common_context() -> tuple[str, str]:
-    print("\n📅 Rango global")
-    since = prompt_text("Fecha inicio global (YYYY-MM-DD)", default=DEFAULT_GLOBAL_SINCE)
-    before = prompt_text("Fecha fin global (YYYY-MM-DD)", default=DEFAULT_GLOBAL_BEFORE)
-    return since, before
+    print("\n📅 Semana global")
+    while True:
+        iso_week = prompt_text("Semana ISO (YYYY-Www)", default=DEFAULT_GLOBAL_ISO_WEEK)
+        try:
+            return iso_week_to_range(iso_week)
+        except (ValueError, TypeError):
+            print("⚠️ Formato inválido. Usa YYYY-Www, por ejemplo 2026-W14")
 
 
 def prompt_execution_mode() -> str:
@@ -493,6 +522,32 @@ def render_command(cmd: list[str]) -> str:
     return " ".join(shlex.quote(part) for part in cmd)
 
 
+def _extract_flag_value(cmd: list[str], flag: str) -> str | None:
+    for i, token in enumerate(cmd):
+        if token == flag and i + 1 < len(cmd):
+            return cmd[i + 1]
+    return None
+
+
+def _source_label_for_spec(spec: PipelineSpec) -> str | None:
+    labels = {
+        "youtube": "Youtube",
+        "twitter": "Twitter",
+        "medios_tampico": "Medios",
+        "facebook_posts": "Facebook",
+        "facebook_comentarios": "Facebook",
+    }
+    return labels.get(spec.key)
+
+
+def weekly_output_dir_for_command(spec: PipelineSpec, since: str, cmd: list[str]) -> Path | None:
+    output_dir = _extract_flag_value(cmd, "--output-dir")
+    source_label = _source_label_for_spec(spec)
+    if not output_dir or not source_label:
+        return None
+    return Path(output_dir) / build_report_tag(since, source_label)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Orquestador general de pipelines Tampico")
     parser.add_argument("--dry-run", action="store_true", help="Solo imprime comandos, no los ejecuta")
@@ -575,6 +630,9 @@ def main() -> None:
     print("\n" + "="*70)
     print("RESUMEN DE EJECUCIÓN")
     print("="*70)
+    since_date = date.fromisoformat(since)
+    iso = since_date.isocalendar()
+    print(f"🗓️ Semana ISO: {iso.year}-W{iso.week:02d}")
     print(f"📋 Modo: {execution_mode.replace('_', ' ').title()}")
     print(f"📅 Fechas: {since} → {before}")
     print(f"📊 Pipelines: {len(selected)}")
@@ -600,7 +658,17 @@ def main() -> None:
     
     facebook_posts_csv = ""  # CSV generado por extractor 4
     
+    cleaned_week_dirs: set[str] = set()
+
     for spec, cmd, env_overrides in prepared:
+        week_dir = weekly_output_dir_for_command(spec, since, cmd)
+        if week_dir is not None:
+            week_dir_key = str(week_dir.resolve())
+            if week_dir_key not in cleaned_week_dirs and week_dir.exists():
+                shutil.rmtree(week_dir)
+                print(f"🧹 Resultado previo eliminado: {week_dir}")
+            cleaned_week_dirs.add(week_dir_key)
+
         print(f"\n▶ Ejecutando {spec.label}")
         env = os.environ.copy()
         env.update(env_overrides)
