@@ -186,30 +186,68 @@ def prompt_common_context() -> tuple[str, str]:
     return since, before
 
 
-def build_youtube(since: str, before: str) -> tuple[list[str], dict[str, str]]:
-    print("\n=== YouTube ===")
-    print("  1) Transcripciones")
-    print("  2) Comentarios")
-    print("  3) Transcripciones y comentarios")
-    mode_choice = prompt_choice("Selecciona opción", ["1", "2", "3"], "3")
-    mode_map = {"1": "transcripciones", "2": "comentarios", "3": "ambos"}
-    mode = mode_map[mode_choice]
-    channels = prompt_list("Canales YouTube separados por coma", DEFAULT_YOUTUBE_CHANNELS)
-    queries = prompt_list("Queries de búsqueda separadas por coma", DEFAULT_YOUTUBE_QUERIES)
-    max_videos_query = prompt_int("Máximo de videos por query", 200)
-    max_videos_channel = prompt_int("Máximo de videos por canal", 300)
-    output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Youtube"))
-    proxy_http = prompt_text("Proxy HTTP opcional", allow_blank=True)
-    proxy_https = prompt_text("Proxy HTTPS opcional", allow_blank=True)
+def prompt_execution_mode() -> str:
+    """
+    Pregunta al usuario si desea instrucciones específicas por red o genéricas para todas.
+    
+    Retorna:
+        - 'per_network': Instrucciones personalizadas para cada red
+        - 'all_networks': Instrucciones genéricas para todas las redes con fechas comunes
+    """
+    print("\n" + "="*70)
+    print("MODO DE EJECUCIÓN")
+    print("="*70)
+    print("\n1) POR RED (Específico)")
+    print("   - Configura parámetros personalizados para cada extractor")
+    print("   - Cada red puede tener queries, opciones y fechas diferentes")
+    print("   - Más control, pero más preguntas\n")
+    print("2) PARA TODAS LAS REDES (Genérico)")
+    print("   - Usa parámetros por defecto para todos los extractores")
+    print("   - Mismas fechas para todos")
+    print("   - Más rápido, menos preguntas\n")
+    
+    mode = prompt_choice("Selecciona modo", ["1", "2"], "1")
+    return "per_network" if mode == "1" else "all_networks"
+
+
+def build_youtube(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        # MODO GENÉRICO: usar parámetros por defecto
+        mode = "ambos"
+        channels = DEFAULT_YOUTUBE_CHANNELS
+        queries = DEFAULT_YOUTUBE_QUERIES
+        max_videos_query = 200
+        max_videos_channel = 300
+        output_dir = str(REPO_ROOT / "Youtube")
+        proxy_http = ""
+        proxy_https = ""
+    else:
+        # MODO ESPECÍFICO: preguntar parámetros
+        print("\n=== YouTube ===")
+        print("  1) Transcripciones")
+        print("  2) Comentarios")
+        print("  3) Transcripciones y comentarios")
+        mode_choice = prompt_choice("Selecciona opción", ["1", "2", "3"], "3")
+        mode_map = {"1": "transcripciones", "2": "comentarios", "3": "ambos"}
+        mode = mode_map[mode_choice]
+        channels = prompt_list("Canales YouTube separados por coma", DEFAULT_YOUTUBE_CHANNELS)
+        queries = prompt_list("Queries de búsqueda separadas por coma", DEFAULT_YOUTUBE_QUERIES)
+        max_videos_query = prompt_int("Máximo de videos por query", 200)
+        max_videos_channel = prompt_int("Máximo de videos por canal", 300)
+        output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Youtube"))
+        proxy_http = prompt_text("Proxy HTTP opcional", allow_blank=True)
+        proxy_https = prompt_text("Proxy HTTPS opcional", allow_blank=True)
 
     env = {}
     api_key = prompt_secret("YouTube API key", "YOUTUBE_API_KEY", required=True)
     if api_key and api_key != os.getenv("YOUTUBE_API_KEY", ""):
         env["YOUTUBE_API_KEY"] = api_key
-    if proxy_http:
-        env["YT_PROXY_HTTP"] = proxy_http
-    if proxy_https:
-        env["YT_PROXY_HTTPS"] = proxy_https
+    
+    if not use_defaults:
+        if proxy_http:
+            env["YT_PROXY_HTTP"] = proxy_http
+        if proxy_https:
+            env["YT_PROXY_HTTPS"] = proxy_https
 
     cmd = [
         sys.executable,
@@ -227,16 +265,27 @@ def build_youtube(since: str, before: str) -> tuple[list[str], dict[str, str]]:
     return cmd, env
 
 
-def build_twitter(since: str, before: str) -> tuple[list[str], dict[str, str]]:
-    print("\n=== Twitter/X ===")
-    use_defaults = prompt_bool("¿Usar queries por defecto del script?", True)
-    queries = [] if use_defaults else prompt_list("Queries separadas por coma", DEFAULT_TWITTER_QUERIES)
-    output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Twitter"))
-    state_path = prompt_text("Ruta al storage_state de X/Twitter", str(REPO_ROOT / "state" / "x_state.json"))
-    max_tweets = prompt_int("Máximo de tweets por query", 3000)
-    max_replies = prompt_int("Máximo de respuestas por tweet", 200)
-    max_reply_scrolls = prompt_int("Máximo de scrolls de respuestas", 8)
-    headless = prompt_bool("¿Ejecutar navegador en headless?", True)
+def build_twitter(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        # MODO GENÉRICO: usar parámetros por defecto
+        queries = []  # Usa defaults del script
+        output_dir = str(REPO_ROOT / "Twitter")
+        state_path = str(REPO_ROOT / "state" / "x_state.json")
+        max_tweets = 3000
+        max_replies = 200
+        max_reply_scrolls = 8
+        headless = True
+    else:
+        # MODO ESPECÍFICO: preguntar parámetros
+        print("\n=== Twitter/X ===")
+        use_script_defaults = prompt_bool("¿Usar queries por defecto del script?", True)
+        queries = [] if use_script_defaults else prompt_list("Queries separadas por coma", DEFAULT_TWITTER_QUERIES)
+        output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Twitter"))
+        state_path = prompt_text("Ruta al storage_state de X/Twitter", str(REPO_ROOT / "state" / "x_state.json"))
+        max_tweets = prompt_int("Máximo de tweets por query", 3000)
+        max_replies = prompt_int("Máximo de respuestas por tweet", 200)
+        max_reply_scrolls = prompt_int("Máximo de scrolls de respuestas", 8)
+        headless = prompt_bool("¿Ejecutar navegador en headless?", True)
 
     cmd = [
         sys.executable,
@@ -264,16 +313,29 @@ def build_medios(
     default_filename_base: str,
     since: str,
     before: str,
+    use_defaults: bool = False,
 ) -> tuple[list[str], dict[str, str]]:
-    print(f"\n=== {label} ===")
-    medios = prompt_list("Sites/medios separados por coma", DEFAULT_MEDIOS_SITES)
-    terminos = prompt_list("Términos separados por coma", default_terms)
-    modo_queries = prompt_choice("Modo de queries", ["compacto", "combinado"], "combinado")
-    output_dir = prompt_text("Directorio base de salida", default_output)
-    nombre_archivo_base = prompt_text("Prefijo del archivo de salida", default_filename_base)
-    omitir_existentes = prompt_bool("¿Omitir semanas ya procesadas?", True)
-    pausa = prompt_float("Pausa entre requests", 2.0)
-    pausa_queries = prompt_float("Pausa entre queries RSS", 3.0)
+    if use_defaults:
+        # MODO GENÉRICO: usar parámetros por defecto
+        medios = DEFAULT_MEDIOS_SITES
+        terminos = default_terms
+        modo_queries = "combinado"
+        output_dir = default_output
+        nombre_archivo_base = default_filename_base
+        omitir_existentes = True
+        pausa = 2.0
+        pausa_queries = 3.0
+    else:
+        # MODO ESPECÍFICO: preguntar parámetros
+        print(f"\n=== {label} ===")
+        medios = prompt_list("Sites/medios separados por coma", DEFAULT_MEDIOS_SITES)
+        terminos = prompt_list("Términos separados por coma", default_terms)
+        modo_queries = prompt_choice("Modo de queries", ["compacto", "combinado"], "combinado")
+        output_dir = prompt_text("Directorio base de salida", default_output)
+        nombre_archivo_base = prompt_text("Prefijo del archivo de salida", default_filename_base)
+        omitir_existentes = prompt_bool("¿Omitir semanas ya procesadas?", True)
+        pausa = prompt_float("Pausa entre requests", 2.0)
+        pausa_queries = prompt_float("Pausa entre queries RSS", 3.0)
 
     cmd = [
         sys.executable,
@@ -297,17 +359,30 @@ def build_medios(
     return cmd, {}
 
 
-def build_facebook_comments_from_csv(since: str, before: str) -> tuple[list[str], dict[str, str]]:
-    print("\n=== Facebook desde CSV URLs ===")
-    mode = prompt_choice("Modo", ["ambos", "posts", "comentarios"], "ambos")
-    pages = prompt_list("Páginas para filtrar (opcional, separadas por coma)", allow_blank=True)
-    input_csv = prompt_text("CSV de URLs (opcional)", allow_blank=True)
-    output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Facebook"))
-    max_comments = prompt_int("Máximo de comentarios por post", 200)
-    max_urls = prompt_int("Máximo de URLs a procesar (opcional)", allow_blank=True)
-    sample_percent = prompt_float("Sampling % de URLs (opcional)", allow_blank=True)
-    sample_seed = prompt_int("Semilla de sampling", 42)
-    batch_size = prompt_int("Batch size en Apify", 25)
+def build_facebook_comments_from_csv(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        # MODO GENÉRICO: usar parámetros por defecto
+        mode = "ambos"
+        pages = []
+        input_csv = ""
+        output_dir = str(REPO_ROOT / "Facebook")
+        max_comments = 200
+        max_urls = None
+        sample_percent = None
+        sample_seed = 42
+        batch_size = 25
+    else:
+        # MODO ESPECÍFICO: preguntar parámetros
+        print("\n=== Facebook desde CSV URLs ===")
+        mode = prompt_choice("Modo", ["ambos", "posts", "comentarios"], "ambos")
+        pages = prompt_list("Páginas para filtrar (opcional, separadas por coma)", allow_blank=True)
+        input_csv = prompt_text("CSV de URLs (opcional)", allow_blank=True)
+        output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Facebook"))
+        max_comments = prompt_int("Máximo de comentarios por post", 200)
+        max_urls = prompt_int("Máximo de URLs a procesar (opcional)", allow_blank=True)
+        sample_percent = prompt_float("Sampling % de URLs (opcional)", allow_blank=True)
+        sample_seed = prompt_int("Semilla de sampling", 42)
+        batch_size = prompt_int("Batch size en Apify", 25)
 
     env = {}
     if mode in {"ambos", "comentarios"}:
@@ -334,15 +409,26 @@ def build_facebook_comments_from_csv(since: str, before: str) -> tuple[list[str]
     return cmd, env
 
 
-def build_facebook_posts(since: str, before: str) -> tuple[list[str], dict[str, str]]:
-    print("\n=== Facebook posts ===")
-    pages = prompt_list("Páginas target separadas por coma", DEFAULT_FB_PAGES)
-    output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Facebook"))
-    max_posts = prompt_int("Máximo de posts por página", 100)
-    max_pages = prompt_int("Máximo de páginas target (opcional)", allow_blank=True)
-    sample_percent = prompt_float("Sampling % de páginas (opcional)", allow_blank=True)
-    sample_seed = prompt_int("Semilla de sampling", 42)
-    batch_size = prompt_int("Batch size", 10)
+def build_facebook_posts(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        # MODO GENÉRICO: usar parámetros por defecto
+        pages = DEFAULT_FB_PAGES
+        output_dir = str(REPO_ROOT / "Facebook")
+        max_posts = 100
+        max_pages = None
+        sample_percent = None
+        sample_seed = 42
+        batch_size = 10
+    else:
+        # MODO ESPECÍFICO: preguntar parámetros
+        print("\n=== Facebook posts ===")
+        pages = prompt_list("Páginas target separadas por coma", DEFAULT_FB_PAGES)
+        output_dir = prompt_text("Directorio base de salida", str(REPO_ROOT / "Facebook"))
+        max_posts = prompt_int("Máximo de posts por página", 100)
+        max_pages = prompt_int("Máximo de páginas target (opcional)", allow_blank=True)
+        sample_percent = prompt_float("Sampling % de páginas (opcional)", allow_blank=True)
+        sample_seed = prompt_int("Semilla de sampling", 42)
+        batch_size = prompt_int("Batch size", 10)
 
     apify_token = prompt_secret("Apify token", "APIFY_TOKEN", required=True)
     env = {}
@@ -366,11 +452,11 @@ def build_facebook_posts(since: str, before: str) -> tuple[list[str], dict[str, 
     return cmd, env
 
 
-def build_pipeline(spec: PipelineSpec, since: str, before: str) -> tuple[list[str], dict[str, str]]:
+def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
     if spec.key == "youtube":
-        return build_youtube(since, before)
+        return build_youtube(since, before, use_defaults)
     if spec.key == "twitter":
-        return build_twitter(since, before)
+        return build_twitter(since, before, use_defaults)
     if spec.key == "medios_tampico":
         return build_medios(
             spec.filename,
@@ -380,11 +466,12 @@ def build_pipeline(spec: PipelineSpec, since: str, before: str) -> tuple[list[st
             "noticias_tampico",
             since,
             before,
+            use_defaults,
         )
     if spec.key == "facebook_comentarios":
-        return build_facebook_comments_from_csv(since, before)
+        return build_facebook_comments_from_csv(since, before, use_defaults)
     if spec.key == "facebook_posts":
-        return build_facebook_posts(since, before)
+        return build_facebook_posts(since, before, use_defaults)
     raise ValueError(f"Pipeline no soportado: {spec.key}")
 
 
@@ -401,34 +488,66 @@ def main() -> None:
         print("❌ El orquestador requiere una terminal interactiva.")
         sys.exit(1)
 
-    print("Pipelines disponibles:")
+    # 1️⃣ PASO 1: Preguntar modo de ejecución
+    execution_mode = prompt_execution_mode()
+
+    # 2️⃣ PASO 2: Seleccionar pipelines
+    print("\n" + "="*70)
+    print("PIPELINES DISPONIBLES")
+    print("="*70)
     for item in PIPELINES:
-        print(f"  {item.code}) {item.label} [{item.key}]")
+        print(f"  {item.code}) {item.label}")
 
     while True:
-        raw_selection = prompt_text("Selecciona pipelines (ej. 1,2,5 o all)", default="all")
+        raw_selection = prompt_text("\nSelecciona pipelines (ej. 1,2,5 o all)", default="all")
         try:
             selected = parse_pipeline_selection(raw_selection)
             break
         except ValueError as exc:
             print(f"⚠️ {exc}")
 
+    # 3️⃣ PASO 3: Capturar fechas
     since, before = prompt_common_context()
-    continue_on_error = prompt_bool("¿Continuar si un pipeline falla?", False)
+    
+    # 4️⃣ PASO 4: Configurar según modo
+    if execution_mode == "all_networks":
+        # MODO GENÉRICO: Usar parámetros por defecto para todos
+        print("\n" + "="*70)
+        print("MODO: GENÉRICO (Todas las redes con parámetros por defecto)")
+        print("="*70)
+        continue_on_error = prompt_bool("\n¿Continuar si un pipeline falla?", False)
+        
+        prepared: list[tuple[PipelineSpec, list[str], dict[str, str]]] = []
+        for spec in selected:
+            cmd, env = build_pipeline(spec, since, before, use_defaults=True)
+            prepared.append((spec, cmd, env))
+    else:
+        # MODO ESPECÍFICO: Preguntar parámetros para cada red
+        print("\n" + "="*70)
+        print("MODO: ESPECÍFICO POR RED")
+        print("="*70)
+        continue_on_error = prompt_bool("\n¿Continuar si un pipeline falla?", False)
+        
+        prepared: list[tuple[PipelineSpec, list[str], dict[str, str]]] = []
+        for spec in selected:
+            cmd, env = build_pipeline(spec, since, before, use_defaults=False)
+            prepared.append((spec, cmd, env))
 
-    prepared: list[tuple[PipelineSpec, list[str], dict[str, str]]] = []
-    for spec in selected:
-        cmd, env = build_pipeline(spec, since, before)
-        prepared.append((spec, cmd, env))
-
-    print("\nResumen de ejecución:")
+    # 5️⃣ PASO 5: Mostrar resumen
+    print("\n" + "="*70)
+    print("RESUMEN DE EJECUCIÓN")
+    print("="*70)
+    print(f"📋 Modo: {execution_mode.replace('_', ' ').title()}")
+    print(f"📅 Fechas: {since} → {before}")
+    print(f"📊 Pipelines: {len(selected)}")
+    
     for spec, cmd, env in prepared:
         print(f"\n[{spec.code}] {spec.label}")
-        print(f"CMD: {render_command(cmd)}")
+        print(f"   CMD: {render_command(cmd)[:80]}...")
         if env:
-            print(f"ENV: {', '.join(sorted(env.keys()))}")
+            print(f"   ENV: {', '.join(sorted(env.keys()))}")
 
-    if not prompt_bool("¿Ejecutar estos pipelines?", True):
+    if not prompt_bool("\n¿Ejecutar estos pipelines?", True):
         print("Cancelado.")
         return
 
@@ -436,6 +555,11 @@ def main() -> None:
         print("Dry run finalizado.")
         return
 
+    # 6️⃣ PASO 6: Ejecutar pipelines
+    print("\n" + "="*70)
+    print("INICIANDO EJECUCIÓN")
+    print("="*70)
+    
     for spec, cmd, env_overrides in prepared:
         print(f"\n▶ Ejecutando {spec.label}")
         env = os.environ.copy()
@@ -449,7 +573,9 @@ def main() -> None:
         if not continue_on_error:
             sys.exit(result.returncode)
 
-    print("\nEjecución terminada.")
+    print("\n" + "="*70)
+    print("✅ EJECUCIÓN TERMINADA")
+    print("="*70)
 
 
 if __name__ == "__main__":
