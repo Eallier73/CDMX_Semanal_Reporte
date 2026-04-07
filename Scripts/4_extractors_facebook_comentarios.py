@@ -2,34 +2,23 @@
 r"""
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║                                                                           ║
-║   💬 DESCARGADOR DE COMENTARIOS VÍA APIFY                                ║
+║   💬 EXTRACTOR DE COMENTARIOS FACEBOOK VÍA APIFY                         ║
 ║                                                                           ║
-║   Toma el CSV de URLs generado por facebook_scraper_unified.py            ║
-║   (Fase 1 / Serper) y baja los comentarios usando el actor               ║
-║   apify/facebook-comments-scraper                                         ║
+║   Descarga comentarios de posts usando URLs generadas por:              ║
+║   2_extractors_facebook_urls.py                                          ║
 ║                                                                           ║
-║  Uso típico:                                                              ║
+║   ⚠️  REQUERIDO: --input-csv (no descarga posts)                         ║
 ║                                                                           ║
-║  1) Generar URLs con tu scraper:                                          ║
-║     python facebook_scraper_unified.py --solo-urls \                     ║
-║       --pages GobiernoCDMX ClaraBrugadaM \                               ║
-║       --since 2026-03-01 --before 2026-03-12                              ║
+║   Uso:                                                                   ║
+║   python 4_extractors_facebook_comentarios.py \\                         ║
+║     --input-csv ./Facebook/2026-03-01_Facebook/2026-03-01_urls.csv \\   ║
+║     --since 2026-03-01 --before 2026-03-12 \\                            ║
+║     --output-dir ./Facebook \\                                            ║
+║     --max-comments 200                                                   ║
 ║                                                                           ║
-║  2) Bajar comentarios con este script:                                    ║
-║     python apify_comentarios.py \                                        ║
-║       --input-csv ./resultados/2026-03-01_Facebook/urls_GobiernoCDMX_...csv \ ║
-║       --max-comments 200                                                  ║
+║   Output: YYYY-MM-DD_Facebook/YYYY-MM-DD_comentarios.csv                ║
 ║                                                                           ║
-║  Requisitos:                                                              ║
-║    pip install apify-client pandas                                        ║
-║                                                                           ║
-║  Config:                                                                  ║
-║    export APIFY_TOKEN="tu_token"                                          ║
-║    (o usa --token)                                                        ║
-║    Token en: https://console.apify.com/settings/integrations              ║
-║                                                                           ║
-║  👨‍💻 Autor: Emilio                                                        ║
-║  📅 Fecha: Marzo 2026                                                     ║
+║   Requisitos: pip install apify-client pandas                            ║
 ║                                                                           ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 """
@@ -794,37 +783,28 @@ def ejecutar_prompt_interactivo(args: argparse.Namespace) -> argparse.Namespace:
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Baja posts/comentarios de Facebook vía Apify a partir de CSV de URLs",
+        description="Baja SOLO comentarios de Facebook vía Apify desde CSV de URLs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Flujo típico:
+Uso:
 
-  1) Generar URLs con Serper (tu scraper unificado):
-     python facebook_scraper_unified.py --solo-urls \\
-       --pages GobiernoCDMX ClaraBrugadaM \\
-       --since 2026-03-01 --before 2026-03-12
+  1) Generar URLs (usar extractor 2):
+     python 2_extractors_facebook_urls.py \\
+       --pages TampicoGob monicavtampico \\
+       --since 2026-03-01 --before 2026-03-12 \\
+       --output-dir ./Facebook
 
-  2) Bajar con Apify (comentarios, posts o ambos):
-     python apify_comentarios.py \\
-       --input-csv ./resultados/2026-03-01_Facebook/urls_GobiernoCDMX_ClaraBrugadaM_2026-03-01_2026-03-12.csv \\
-       --modo ambos --max-comments 200
-
-  3) (Opcional) Limitar URLs y filtrar por páginas:
-     python apify_comentarios.py \\
-       --pages GobiernoCDMX ClaraBrugadaM \\
-       --max-urls 20 --max-comments 100
-
-  4) Modo interactivo:
-     python apify_comentarios.py --prompt
+  2) Bajar comentarios:
+     python 4_extractors_facebook_comentarios.py \\
+       --input-csv ./Facebook/2026-03-01_Facebook/2026-03-01_urls.csv \\
+       --since 2026-03-01 --before 2026-03-12 \\
+       --output-dir ./Facebook \\
+       --max-comments 200
         """,
     )
 
-    parser.add_argument("--modo", "--mode", choices=["posts", "comentarios", "ambos"], default="ambos",
-                        help="Qué extraer: solo posts, solo comentarios, o ambos (default: ambos)")
-    parser.add_argument("--pages", nargs="+", default=None,
-                        help="Handles de páginas para filtrar URLs (si se omite, no filtra)")
-    parser.add_argument("--input-csv", required=False, default=None,
-                        help="CSV con URLs de posts (generado por Fase 1 / Serper). Si se omite, se busca el más reciente.")
+    parser.add_argument("--input-csv", required=True,
+                        help="CSV con URLs de posts (generado por 2_extractors_facebook_urls.py)")
     parser.add_argument("--max-comments", type=int, default=200,
                         help="Máximo de comentarios por post (default: 200)")
     parser.add_argument("--max-urls", type=int, default=None,
@@ -852,107 +832,125 @@ Flujo típico:
 
 
 def main():
+    """Ejecuta descarga de SOLO comentarios desde CSV de URLs."""
     args = parse_args()
-    usar_prompt = args.prompt or not args.no_prompt
-    if usar_prompt:
-        args = ejecutar_prompt_interactivo(args)
 
-    need_apify = args.modo in {"comentarios", "ambos"}
-    client = None
-    if need_apify:
-        try:
-            from apify_client import ApifyClient
-        except ImportError:
-            print("❌ Falta dependencia: apify-client")
-            print("   Instala con: pip install apify-client pandas")
-            sys.exit(1)
+    # Validar token
+    token = args.token or os.environ.get("APIFY_TOKEN")
+    if not token:
+        print("❌ Necesitas APIFY_TOKEN o --token para ejecutar el actor.")
+        print("   export APIFY_TOKEN='tu_token'")
+        print("   o --token tu_token")
+        print("   → https://console.apify.com/settings/integrations")
+        sys.exit(1)
 
-        # Token
-        token = args.token or os.environ.get("APIFY_TOKEN")
-        if not token:
-            print("❌ Necesitas tu API token de Apify.")
-            print("   export APIFY_TOKEN='tu_token'")
-            print("   o --token tu_token")
-            print("   → https://console.apify.com/settings/integrations")
-            sys.exit(1)
+    try:
+        from apify_client import ApifyClient
+    except ImportError:
+        print("❌ Falta dependencia: apify-client")
+        print("   Instala con: pip install apify-client pandas")
+        sys.exit(1)
 
-        client = ApifyClient(token)
+    client = ApifyClient(token)
 
-    # Input CSV
+    # Input CSV (REQUERIDO)
     input_csv = args.input_csv
     if not input_csv:
-        input_csv = encontrar_csv_urls_por_filtros(
-            base_dir=DEFAULT_URLS_BASE_DIR,
-            pages=args.pages,
-            since_label=args.since,
-            before_label=args.before,
-        )
-        if not input_csv:
-            input_csv = encontrar_csv_urls_mas_reciente(DEFAULT_URLS_BASE_DIR)
-        if input_csv:
-            print(f"🧭 Usando CSV más reciente: {input_csv}")
-        else:
-            print("❌ No se encontró un CSV de URLs reciente.")
-            print("   Usa --input-csv /ruta/al/urls_*.csv")
-            sys.exit(1)
+        print("❌ --input-csv es REQUERIDO.")
+        print("   Debe ser un CSV generado por 2_extractors_facebook_urls.py")
+        sys.exit(1)
 
-    # Leer URLs
+    # Leer URLs desde CSV
     try:
-        urls = leer_urls_csv(input_csv, pages=args.pages)
+        urls = leer_urls_csv(input_csv)
     except (FileNotFoundError, ValueError) as e:
-        print(f"❌ {e}")
+        print(f"❌ Error leyendo CSV: {e}")
         sys.exit(1)
 
     if not urls:
         print("❌ No se encontraron URLs válidas en el CSV.")
         sys.exit(1)
 
+    # Aplicar sampling si se especifica
     if args.sample_percent is not None and args.sample_percent < 100:
         original_count = len(urls)
         sample_size = max(1, round(original_count * (args.sample_percent / 100.0)))
         if sample_size < len(urls):
             random.seed(args.sample_seed)
             urls = random.sample(urls, sample_size)
-            print(
-                f"  🎲 Sampling Facebook: {args.sample_percent:.2f}% "
-                f"({sample_size}/{original_count})"
-            )
-            print(f"  🔢 URLs tras sampling: {len(urls)}")
+            print(f"🎲 Sampling URLs: {args.sample_percent:.2f}% ({sample_size}/{original_count})")
 
-    # Limitar URLs
+    # Limitar URLs si se especifica
     if args.max_urls and len(urls) > args.max_urls:
         urls = urls[:args.max_urls]
-        print(f"  ✂️  Limitado a {args.max_urls} URLs")
+        print(f"✂️  Limitado a {args.max_urls} URLs")
 
-    # Output dir con carpeta semanal
-    since_label = args.since
-    before_label = args.before
-    if not since_label or not before_label:
-        inferred_since, inferred_before = inferir_rango_desde_input_csv(input_csv)
-        since_label = since_label or inferred_since
-        before_label = before_label or inferred_before
-    since_label = since_label or "sin_inicio"
-    before_label = before_label or "sin_fin"
-
-    base_output_dir = args.output_dir or DEFAULT_OUTPUT_BASE_DIR
-    output_dir = os.path.join(base_output_dir, build_report_tag(since_label, "Facebook"))
+    # Preparar directorio de salida
+    since_label = args.since or "sin_inicio"
+    before_label = args.before or "sin_fin"
+    output_dir = os.path.join(
+        args.output_dir,
+        build_report_tag(since_label, "Facebook")
+    )
+    os.makedirs(output_dir, exist_ok=True)
 
     print("\n" + "=" * 70)
-    print("💬 EXTRACTOR DE POSTS/COMENTARIOS VÍA APIFY")
+    print("💬 EXTRACTOR DE COMENTARIOS FACEBOOK VÍA APIFY")
     print("=" * 70)
+    print(f"URLs a procesar: {len(urls)}")
+    print(f"Máx comentarios por post: {args.max_comments}")
+    print(f"Batch size: {args.batch_size}")
 
-    run_pipeline(
-        client=client,
-        urls=urls,
-        max_comments=args.max_comments,
-        since=args.since,
-        output_dir=output_dir,
-        input_csv=input_csv,
-        batch_size=args.batch_size,
-        modo=args.modo,
-    )
+    # Procesar URLs en batches
+    all_comments = []
+    total_batches = (len(urls) + args.batch_size - 1) // args.batch_size
+    
+    for i in range(0, len(urls), args.batch_size):
+        batch = urls[i:i + args.batch_size]
+        batch_num = (i // args.batch_size) + 1
+        print(f"\n📦 Batch {batch_num}/{total_batches} ({len(batch)} URL(s))")
+        
+        items = obtener_comentarios_batch(
+            client=client,
+            post_urls=batch,
+            max_comments=args.max_comments,
+            since=args.since,
+        )
+        
+        comentarios = procesar_items_comentarios(items)
+        all_comments.extend(comentarios)
+        print(f"   Acumulado comentarios: {len(all_comments)}")
+        
+        if i + args.batch_size < len(urls):
+            time.sleep(3)
 
-    print("\n🏁 Listo.")
+    # Crear DataFrame y guardar
+    df_comentarios = pd.DataFrame(all_comments)
+
+    # Nombre simplificado: [tag]_comentarios.csv
+    since_label = args.since or "sin_inicio"
+    report_tag = build_report_tag(since_label, "Facebook")
+    csv_path = os.path.join(output_dir, f"{report_tag}_comentarios.csv")
+    txt_path = os.path.join(output_dir, f"{report_tag}_comentarios.txt")
+
+    if len(df_comentarios) > 0:
+        df_comentarios.to_csv(csv_path, index=False, encoding="utf-8-sig")
+        with open(txt_path, "w", encoding="utf-8") as f:
+            for text in df_comentarios["texto"].fillna("").astype(str).tolist():
+                clean = re.sub(r"\s+", " ", text).strip()
+                if clean:
+                    f.write(clean + "\n")
+
+    print("\n" + "=" * 70)
+    print("✅ EXTRACCIÓN COMPLETADA")
+    print("=" * 70)
+    print(f"Comentarios descargados: {len(all_comments)}")
+    if len(df_comentarios) > 0:
+        print(f"CSV: {csv_path}")
+        print(f"TXT: {txt_path}")
+    else:
+        print("⚠️  No se encontraron comentarios.")
+    print("\n⚠️  IMPORTANTE: Este extractor SOLO descarga comentarios (sin posts).")
 
 
 if __name__ == "__main__":

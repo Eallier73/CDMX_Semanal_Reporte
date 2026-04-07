@@ -2,24 +2,26 @@
 """
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║                                                                           ║
-║   📝 EXTRACTOR DE POSTS FACEBOOK VÍA APIFY                               ║
+║   🔗 GENERADOR DE URLs DE FACEBOOK                                       ║
 ║                                                                           ║
-║   Modo A (sin CSV): Descargo posts directamente desde páginas             ║
-║   Modo B (con CSV): Descargo posts de URLs específicas (de 2_extractors)  ║
+║   Descarga posts de páginas Facebook usando Apify, pero retiene          ║
+║   SOLO URLs + metadata (sin guardar el contenido de los posts).          ║
 ║                                                                           ║
-║   IMPORTANTE: Solo descarga posts, NUNCA comentarios                      ║
+║   Las URLs generadas se alimentan a:                                      ║
+║   - 4_extractors_facebook_comentarios.py (para bajar comentarios)        ║
+║   - 5_extractors_facebook_posts.py (modo alternativo con CSV)            ║
 ║                                                                           ║
-║   Uso Modo A (directo):                                                  ║
-║   python 5_extractors_facebook_posts.py \\                               ║
+║   Uso:                                                                   ║
+║   python 2_extractors_facebook_urls.py \\                                ║
 ║     --pages TampicoGob monicavtampico \\                                 ║
 ║     --since 2026-03-01 --before 2026-03-12 \\                            ║
-║     --output-dir ./Facebook                                              ║
+║     --output-dir ./Facebook \\                                            ║
+║     --max-urls 500                                                       ║
 ║                                                                           ║
-║   Uso Modo B (desde URLs):                                               ║
-║   python 5_extractors_facebook_posts.py \\                               ║
-║     --input-csv ./Facebook/2026-03-01_Facebook/2026-03-01_urls.csv \\   ║
-║     --since 2026-03-01 --before 2026-03-12 \\                            ║
-║     --output-dir ./Facebook                                              ║
+║   Output: YYYY-MM-DD_Facebook/YYYY-MM-DD_urls.csv                       ║
+║   Columnas: post_url, page_url, page_handle, fecha_post, fecha_post_date║
+║                                                                           ║
+║   Requisitos: pip install apify-client pandas                            ║
 ║                                                                           ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 """
@@ -50,7 +52,12 @@ DEFAULT_RESULTS_LIMIT_PER_PAGE = 100
 DEFAULT_BATCH_SIZE = 10
 
 
+# ============================================================================
+# UTILIDADES
+# ============================================================================
+
 def valid_date(value: str) -> str:
+    """Valida que sea una fecha YYYY-MM-DD."""
     try:
         datetime.strptime(value, "%Y-%m-%d")
     except ValueError as exc:
@@ -59,6 +66,7 @@ def valid_date(value: str) -> str:
 
 
 def valid_sampling_percent(value: str) -> float:
+    """Valida porcentaje de sampling."""
     try:
         pct = float(value)
     except ValueError as exc:
@@ -74,11 +82,13 @@ def valid_sampling_percent(value: str) -> float:
 
 
 def parse_pages_text(raw: str) -> list[str]:
+    """Parsea lista de páginas separadas por espacio o coma."""
     normalizado = raw.replace(",", " ").strip()
     return [p for p in normalizado.split() if p]
 
 
 def normalize_target(target: str) -> str:
+    """Normaliza handle de página."""
     value = (target or "").strip()
     if not value:
         return ""
@@ -95,6 +105,7 @@ def normalize_target(target: str) -> str:
 
 
 def target_to_page_url(target: str) -> str:
+    """Convierte handle a URL completa de Facebook."""
     value = (target or "").strip()
     if not value:
         return ""
@@ -105,6 +116,7 @@ def target_to_page_url(target: str) -> str:
 
 
 def extract_handle_from_url(url: str) -> str:
+    """Extrae handle desde URL de Facebook."""
     if not url:
         return ""
     try:
@@ -118,7 +130,8 @@ def extract_handle_from_url(url: str) -> str:
 
 
 def parse_item_datetime(item: dict) -> Optional[datetime]:
-    # Prioridad: timestamp numerico (s/ms), luego campos string ISO.
+    """Extrae datetime de un item del actor."""
+    # Intentar campos de timestamp numérico
     timestamp_candidates = [
         item.get("timestamp"),
         item.get("postTimestamp"),
@@ -139,6 +152,7 @@ def parse_item_datetime(item: dict) -> Optional[datetime]:
         except Exception:
             continue
 
+    # Intentar campos de fecha string ISO
     date_candidates = [
         item.get("date"),
         item.get("postDate"),
@@ -164,6 +178,7 @@ def parse_item_datetime(item: dict) -> Optional[datetime]:
 
 
 def in_date_range(value: Optional[datetime], since: Optional[str], before: Optional[str]) -> bool:
+    """Verifica si una fecha está en rango."""
     if value is None:
         return False
     since_dt = datetime.strptime(since, "%Y-%m-%d") if since else None
@@ -178,6 +193,7 @@ def in_date_range(value: Optional[datetime], since: Optional[str], before: Optio
 
 
 def belongs_to_targets(item: dict, target_handles: set[str]) -> bool:
+    """Verifica si un item pertenece a páginas target."""
     if not target_handles:
         return True
 
@@ -203,7 +219,8 @@ def belongs_to_targets(item: dict, target_handles: set[str]) -> bool:
     return False
 
 
-def normalize_post_item(item: dict) -> dict:
+def normalize_url_item(item: dict) -> dict:
+    """Extrae SOLO metadatos de URL de un item del actor."""
     author = item.get("author") if isinstance(item.get("author"), dict) else {}
 
     post_url = str(
@@ -227,54 +244,13 @@ def normalize_post_item(item: dict) -> dict:
         "post_url": post_url,
         "page_url": page_url,
         "page_handle": extract_handle_from_url(page_url) or extract_handle_from_url(post_url),
-        "post_texto": str(
-            item.get("text")
-            or item.get("postText")
-            or item.get("message")
-            or item.get("content")
-            or ""
-        ).strip(),
         "fecha_post": dt_iso,
         "fecha_post_date": dt.date().isoformat() if dt else "",
-        "num_comentarios_post": item.get("commentsCount") or item.get("comments") or 0,
-        "reacciones_post": item.get("reactionsCount") or item.get("likes") or 0,
-        "autor": str(item.get("authorName") or author.get("name") or "").strip(),
     }
 
 
-def leer_urls_csv(input_csv: str) -> list[str]:
-    """Lee URLs desde CSV generado por 2_extractors_facebook_urls.py"""
-    if not os.path.exists(input_csv):
-        raise FileNotFoundError(f"No existe: {input_csv}")
-    
-    urls = []
-    vistas = set()
-    
-    try:
-        df = pd.read_csv(input_csv, encoding="utf-8")
-    except Exception as e:
-        raise ValueError(f"Error leyendo CSV: {e}")
-    
-    # Buscar columna de URL
-    col_url = None
-    for candidato in ["post_url", "url", "URL"]:
-        if candidato in df.columns:
-            col_url = candidato
-            break
-    
-    if col_url is None:
-        raise ValueError(f"CSS sin columna 'post_url'. Columnas: {df.columns.tolist()}")
-    
-    for _, row in df.iterrows():
-        raw = str(row.get(col_url) or "").strip()
-        if raw and raw not in vistas:
-            urls.append(raw)
-            vistas.add(raw)
-    
-    return urls
-
-
-def run_posts_batch(client, page_urls: list[str], results_limit: int) -> list[dict]:
+def run_urls_batch(client, page_urls: list[str], results_limit: int) -> list[dict]:
+    """Ejecuta actor FB para un batch de páginas, retorna items crudos."""
     run_input = {
         "pageUrls": page_urls,
         "resultsLimit": results_limit,
@@ -283,11 +259,11 @@ def run_posts_batch(client, page_urls: list[str], results_limit: int) -> list[di
     try:
         run = client.actor(ACTOR_POSTS).call(run_input=run_input)
     except Exception as exc:
-        print(f"     Error al correr actor: {exc}")
+        print(f"     ❌ Error al correr actor: {exc}")
         return []
 
     if not run:
-        print("     El actor no retorno resultado.")
+        print("     ❌ El actor no retornó resultado.")
         return []
 
     status = run.get("status", "UNKNOWN")
@@ -296,11 +272,11 @@ def run_posts_batch(client, page_urls: list[str], results_limit: int) -> list[di
 
     dataset_id = run.get("defaultDatasetId")
     if not dataset_id:
-        print("     Sin dataset en respuesta del actor.")
+        print("     ❌ Sin dataset en respuesta del actor.")
         return []
 
     items = list(client.dataset(dataset_id).iterate_items())
-    print(f"     Items recibidos: {len(items)}")
+    print(f"     ✅ {len(items)} items descargados")
     return items
 
 
@@ -331,7 +307,7 @@ def _input_float(
     minimo: float = 0.01,
     maximo: float = 100.0,
 ) -> Optional[float]:
-    suffix = f" [{default}]" if default is not None else " [vacio]"
+    suffix = f" [{default}]" if default is not None else " [vacío]"
     while True:
         raw = input(f"{label}{suffix}: ").strip()
         if not raw:
@@ -339,11 +315,11 @@ def _input_float(
         try:
             n = float(raw)
             if n < minimo or n > maximo:
-                print(f"   Debe estar entre {minimo} y {maximo}.")
+                print(f"   ⚠️ Debe estar entre {minimo} y {maximo}.")
                 continue
             return n
         except ValueError:
-            print("   Ingresa un numero valido.")
+            print("   ⚠️ Ingresa un número válido.")
 
 
 def _input_date(label: str, default: str) -> str:
@@ -353,213 +329,195 @@ def _input_date(label: str, default: str) -> str:
             valid_date(value)
             return value
         except argparse.ArgumentTypeError:
-            print("   Formato invalido. Usa YYYY-MM-DD.")
+            print("   ⚠️ Formato inválido. Usa YYYY-MM-DD.")
 
 
 def ejecutar_prompt_interactivo(args: argparse.Namespace) -> argparse.Namespace:
+    """Ejecuta preguntas interactivas en consola."""
     print("\n" + "=" * 70)
-    print("MODO INTERACTIVO - EXTRACTOR FACEBOOK POSTS APIFY")
+    print("🔗 GENERADOR DE URLs FACEBOOK")
     print("=" * 70)
+    print("Descarga URLs de posts de páginas Facebook.\n")
 
     default_pages = " ".join(args.pages or DEFAULT_PAGES)
-    pages_raw = _input_con_default("Paginas target (espacio o coma)", default_pages)
+    pages_raw = _input_con_default("Páginas (separadas por espacio o coma)", default_pages)
     args.pages = parse_pages_text(pages_raw)
 
     today = datetime.now().date()
     since_default = args.since or (today - timedelta(days=7)).strftime("%Y-%m-%d")
     before_default = args.before or today.strftime("%Y-%m-%d")
+
     args.since = _input_date("Fecha desde (YYYY-MM-DD)", since_default)
     args.before = _input_date("Fecha hasta (YYYY-MM-DD)", before_default)
 
-    args.max_posts = _input_int("Max posts por pagina", args.max_posts, minimo=1) or DEFAULT_RESULTS_LIMIT_PER_PAGE
-    args.max_pages = _input_int("Max paginas target (vacio = todas)", args.max_pages, minimo=1)
+    args.max_urls = _input_int("Máx URLs por página", args.max_urls, minimo=1) or 100
     args.sample_percent = _input_float(
-        "Sampling paginas target (%) (vacio = sin sampling)",
+        "Sampling URLs Facebook (%) (vacío = sin sampling)",
         args.sample_percent,
         minimo=0.01,
         maximo=100.0,
     )
     if args.sample_percent is not None:
         args.sample_seed = _input_int("Semilla sampling", args.sample_seed, minimo=0) or 42
-    args.batch_size = _input_int("Batch size paginas", args.batch_size, minimo=1) or DEFAULT_BATCH_SIZE
+    args.batch_size = _input_int("Batch size", args.batch_size, minimo=1) or 10
 
-    output_raw = input(f"Directorio base salida [{args.output_dir}]: ").strip()
+    output_raw = input(
+        f"Directorio base salida [{args.output_dir}]: "
+    ).strip()
     if output_raw:
         args.output_dir = output_raw
 
     if not (args.token or os.environ.get("APIFY_TOKEN")):
-        token_raw = input("APIFY token (ENTER si ya esta en APIFY_TOKEN): ").strip()
+        token_raw = input("APIFY token (ENTER si ya está en APIFY_TOKEN): ").strip()
         if token_raw:
             args.token = token_raw
+
     return args
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args():
+    """Parsea argumentos de CLI."""
     parser = argparse.ArgumentParser(
-        description="Descarga posts de Facebook usando scraper_one/facebook-posts-scraper",
+        description="Genera CSV de URLs de posts de Facebook vía Apify",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Modo A - Descarga directa desde páginas:
-  python 5_extractors_facebook_posts.py \\
-    --pages TampicoGob monicavtampico \\
-    --since 2026-03-01 --before 2026-03-12 \\
-    --output-dir ./Facebook
+Ejemplos:
 
-Modo B - Desde URLs preexistentes (recomendado, más eficiente):
-  python 5_extractors_facebook_posts.py \\
-    --input-csv ./Facebook/2026-03-01_Facebook/2026-03-01_urls.csv \\
-    --since 2026-03-01 --before 2026-03-12 \\
-    --output-dir ./Facebook
+  1) Descargar URLs de dos páginas en rango semanal:
+     python 2_extractors_facebook_urls.py \\
+       --pages TampicoGob monicavtampico \\
+       --since 2026-03-01 --before 2026-03-12 \\
+       --output-dir ./Facebook \\
+       --max-urls 200
+
+  2) Modo interactivo:
+     python 2_extractors_facebook_urls.py --prompt
+
+  3) Con sampling (si hay muchas URLs):
+     python 2_extractors_facebook_urls.py \\
+       --pages TampicoGob monicavtampico \\
+       --since 2026-03-01 --before 2026-03-12 \\
+       --output-dir ./Facebook \\
+       --max-urls 500 \\
+       --sample-percent 50 \\
+       --sample-seed 42
         """,
     )
+
     parser.add_argument("--pages", nargs="+", default=None,
-                        help="Paginas target (handles o URLs). Requerido si NO se usa --input-csv")
-    parser.add_argument("--input-csv", default=None,
-                        help="CSV de URLs generado por 2_extractors_facebook_urls.py (Modo B)")
+                        help="Handles de páginas Facebook (default: monicavtampico TampicoGob)")
+    parser.add_argument("--max-urls", type=int, default=100,
+                        help="Máximo de URLs descargadas por página (default: 100)")
+    parser.add_argument("--sample-percent", type=valid_sampling_percent, default=None,
+                        help="Sampling aleatorio de URLs en porcentaje (0-100)")
+    parser.add_argument("--sample-seed", type=int, default=42,
+                        help="Semilla para muestreo aleatorio (default: 42)")
     parser.add_argument("--since", required=True, type=valid_date,
                         help="Fecha inicio YYYY-MM-DD (heredada del orquestador)")
     parser.add_argument("--before", required=True, type=valid_date,
                         help="Fecha fin YYYY-MM-DD (heredada del orquestador)")
-    parser.add_argument("--max-posts", type=int, default=DEFAULT_RESULTS_LIMIT_PER_PAGE,
-                        help="Maximo de posts por pagina target en el actor")
-    parser.add_argument("--max-pages", type=int, default=None,
-                        help="Limitar numero de paginas target")
-    parser.add_argument("--max-urls", type=int, default=None,
-                        help="Alias legacy de --max-pages")
-    parser.add_argument("--sample-percent", type=valid_sampling_percent, default=None,
-                        help="Sampling aleatorio de paginas target en porcentaje (0-100)")
-    parser.add_argument("--sample-seed", type=int, default=42,
-                        help="Semilla para sampling de paginas target (default: 42)")
-    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
-                        help="Paginas/URLs por batch de ejecucion (default: 10)")
+    parser.add_argument("--batch-size", type=int, default=10,
+                        help="Páginas por batch (default: 10)")
     parser.add_argument("--token", default=None,
                         help="Apify API token (o variable APIFY_TOKEN)")
     parser.add_argument("--output-dir", required=True,
                         help="Directorio base de salida (heredado del orquestador)")
     parser.add_argument("--prompt", action="store_true",
-                        help="Forzar modo interactivo")
+                        help="Fuerza modo interactivo (preguntas en consola)")
     parser.add_argument("--no-prompt", action="store_true",
-                        help="Desactivar modo interactivo")
+                        help="Desactiva preguntas interactivas y usa solo CLI")
+
     return parser.parse_args()
 
 
-def main() -> None:
+def main():
+    """Ejecución principal."""
     args = parse_args()
+    usar_prompt = args.prompt or not args.no_prompt
+    if usar_prompt:
+        args = ejecutar_prompt_interactivo(args)
 
-    if args.prompt and args.no_prompt:
-        print("No puedes usar --prompt y --no-prompt al mismo tiempo.")
-        sys.exit(1)
-
-    # Validar que si se usa --input-csv, no se requieren --pages
-    use_csv_mode = args.input_csv is not None
-    if not use_csv_mode and not args.pages:
-        args.pages = DEFAULT_PAGES
-
-    if not args.since or not args.before:
-        print("Debes indicar --since y --before (o capturarlas en prompt).")
-        sys.exit(1)
-
+    # Validar fechas
     since_dt = datetime.strptime(args.since, "%Y-%m-%d")
     before_dt = datetime.strptime(args.before, "%Y-%m-%d")
     if since_dt > before_dt:
-        print("Fecha invalida: --since no puede ser mayor a --before.")
+        print("❌ Fecha invalida: --since no puede ser mayor a --before.")
         sys.exit(1)
 
+    # Validar token
     token = args.token or os.environ.get("APIFY_TOKEN")
     if not token:
-        print("Necesitas APIFY_TOKEN o --token para ejecutar el actor.")
-        print("Token: https://console.apify.com/settings/integrations")
+        print("❌ Necesitas APIFY_TOKEN o --token para ejecutar el actor.")
+        print("   Token: https://console.apify.com/settings/integrations")
         sys.exit(1)
 
     try:
         from apify_client import ApifyClient
     except ImportError:
-        print("Falta dependencia: apify-client")
-        print("Instala con: pip install apify-client pandas")
+        print("❌ Falta dependencia: apify-client")
+        print("   Instala con: pip install apify-client pandas")
+        sys.exit(1)
+
+    # Normalizar páginas
+    target_handles = [normalize_target(p) for p in args.pages]
+    target_handles = [h for h in target_handles if h]
+    if not target_handles:
+        print("❌ No se pudieron normalizar páginas target.")
+        sys.exit(1)
+
+    page_urls = [target_to_page_url(p) for p in args.pages if str(p).strip()]
+    page_urls = [u for u in page_urls if u]
+
+    # Aplicar sampling si es necesario
+    if args.sample_percent is not None and args.sample_percent < 100:
+        original_count = len(page_urls)
+        sample_size = max(1, round(original_count * (args.sample_percent / 100.0)))
+        if sample_size < original_count:
+            random.seed(args.sample_seed)
+            page_urls = random.sample(page_urls, sample_size)
+            print(f"🎲 Sampling páginas: {args.sample_percent:.2f}% ({sample_size}/{original_count})")
+
+    if not page_urls:
+        print("❌ No hay páginas target para procesar.")
         sys.exit(1)
 
     client = ApifyClient(token)
 
-    # ========================================================================
-    # MODO A: Leer URLs desde file CSV (recomendado)
-    # ========================================================================
-    if use_csv_mode:
-        print("\n" + "=" * 70)
-        print("MODO B: POSTS DESDE URLs (CSV)")
-        print("=" * 70)
-        
-        try:
-            page_urls = leer_urls_csv(args.input_csv)
-        except (FileNotFoundError, ValueError) as e:
-            print(f"❌ Error leyendo CSV: {e}")
-            sys.exit(1)
-        
-        if not page_urls:
-            print("❌ No hay URLs en el CSV.")
-            sys.exit(1)
-        
-        print(f"✅ {len(page_urls)} URLs leídas desde CSV")
-        target_handles = ["from_csv"]
-        
-    # ========================================================================
-    # MODO B: Descargar URLs directamente desde páginas
-    # ========================================================================
-    else:
-        print("\n" + "=" * 70)
-        print("MODO A: POSTS DESDE PÁGINAS")
-        print("=" * 70)
-        
-        target_handles = [normalize_target(p) for p in args.pages]
-        target_handles = [h for h in target_handles if h]
-        if not target_handles:
-            print("❌ No se pudieron normalizar páginas target.")
-            sys.exit(1)
-
-        page_urls = [target_to_page_url(p) for p in args.pages if str(p).strip()]
-        page_urls = [u for u in page_urls if u]
-
-        if args.sample_percent is not None and args.sample_percent < 100:
-            original_count = len(page_urls)
-            sample_size = max(1, round(original_count * (args.sample_percent / 100.0)))
-            if sample_size < original_count:
-                random.seed(args.sample_seed)
-                page_urls = random.sample(page_urls, sample_size)
-                print(f"🎲 Sampling páginas: {args.sample_percent:.2f}% ({sample_size}/{original_count})")
-
-        max_pages = args.max_pages if args.max_pages is not None else args.max_urls
-        if max_pages and len(page_urls) > max_pages:
-            page_urls = page_urls[:max_pages]
-            print(f"Limitado a {max_pages} páginas target")
-
-    if not page_urls:
-        print("❌ No hay URLs para procesar.")
-        sys.exit(1)
-
+    # Header de ejecución
+    print("\n" + "=" * 70)
+    print("🔗 EXTRACTOR DE URLs FACEBOOK VIA APIFY")
+    print("=" * 70)
     print(f"Actor: {ACTOR_POSTS}")
     print(f"Targets: {', '.join(target_handles)}")
-    print(f"Rango: {args.since} -> {args.before}")
-    print(f"URLs a procesar: {len(page_urls)}")
+    print(f"Rango: {args.since} → {args.before}")
+    print(f"Páginas a procesar: {len(page_urls)}")
+    print(f"Máx URLs por página: {args.max_urls}")
 
+    # Ejecutar batches
     all_items: list[dict] = []
     total_batches = (len(page_urls) + args.batch_size - 1) // args.batch_size
     for i in range(0, len(page_urls), args.batch_size):
         batch = page_urls[i:i + args.batch_size]
         batch_num = (i // args.batch_size) + 1
-        print(f"\n📦 Batch {batch_num}/{total_batches} ({len(batch)} URL(s))")
-        items = run_posts_batch(client, batch, args.max_posts)
+        print(f"\n📦 Batch {batch_num}/{total_batches} ({len(batch)} página(s))")
+        items = run_urls_batch(client, batch, args.max_urls)
         all_items.extend(items)
-        print(f"   Acumulado: {len(all_items)} items")
+        print(f"   Acumulado raw items: {len(all_items)}")
         if i + args.batch_size < len(page_urls):
             time.sleep(3)
 
+    # Procesar y filtrar URLs
     rows = []
     seen_urls = set()
+    target_set = set(target_handles)
 
     for item in all_items:
-        row = normalize_post_item(item)
+        row = normalize_url_item(item)
         if not row.get("post_url"):
             continue
         if row["post_url"] in seen_urls:
+            continue
+        if not belongs_to_targets(row, target_set):
             continue
         dt = parse_item_datetime(item)
         if not in_date_range(dt, args.since, args.before):
@@ -568,45 +526,35 @@ def main() -> None:
         rows.append(row)
 
     rows.sort(key=lambda x: (x.get("fecha_post") or ""), reverse=True)
-    df_posts = pd.DataFrame(rows, columns=[
+
+    # Crear DataFrame
+    df_urls = pd.DataFrame(rows, columns=[
         "post_url",
         "page_url",
         "page_handle",
-        "autor",
         "fecha_post",
         "fecha_post_date",
-        "post_texto",
-        "num_comentarios_post",
-        "reacciones_post",
     ])
 
     # Preparar salida
-    since_label = args.since or "sin_inicio"
-    before_label = args.before or "sin_fin"
-    report_tag = build_report_tag(since_label, "Facebook")
-    output_dir = os.path.join(args.output_dir, report_tag)
+    semana_tag = build_report_tag(args.since, "Facebook")
+    output_dir = os.path.join(args.output_dir, semana_tag)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Nombre simplificado: [tag]_posts.csv
-    csv_path = os.path.join(output_dir, f"{report_tag}_posts.csv")
-    txt_path = os.path.join(output_dir, f"{report_tag}_posts.txt")
+    # Nombrar archivo con fecha - archivo URLs con patrón semana_urls
+    output_csv = os.path.join(output_dir, f"{semana_tag}_urls.csv")
 
-    df_posts.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    with open(txt_path, "w", encoding="utf-8") as f:
-        for text in df_posts["post_texto"].fillna("").astype(str).tolist():
-            clean = re.sub(r"\s+", " ", text).strip()
-            if clean:
-                f.write(clean + "\n")
+    # Guardar
+    df_urls.to_csv(output_csv, index=False, encoding="utf-8")
 
     print("\n" + "=" * 70)
     print("✅ EXTRACCIÓN COMPLETADA")
     print("=" * 70)
-    print(f"Posts raw del actor: {len(all_items)}")
-    print(f"Posts finales: {len(df_posts)}")
-    print(f"CSV: {csv_path}")
-    print(f"TXT: {txt_path}")
-    print("\n⚠️ IMPORTANTE: Este extractor SOLO descarga posts (sin comentarios).")
-    print("Para comentarios, usa: 4_extractors_facebook_comentarios.py")
+    print(f"URLs descargadas: {len(df_urls)}")
+    print(f"Archivo guardado: {output_csv}")
+    print("\nEste CSV se puede usar como input para:")
+    print("  • 4_extractors_facebook_comentarios.py --input-csv <archivo>")
+    print("  • 5_extractors_facebook_posts.py --input-csv <archivo>")
 
 
 if __name__ == "__main__":
