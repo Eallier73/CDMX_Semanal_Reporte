@@ -833,16 +833,16 @@ Flujo típico:
                         help="Sampling aleatorio de URLs en porcentaje (0-100)")
     parser.add_argument("--sample-seed", type=int, default=42,
                         help="Semilla para muestreo aleatorio de URLs (default: 42)")
-    parser.add_argument("--since", default=None, type=valid_date,
-                        help="Solo comentarios más nuevos que YYYY-MM-DD")
-    parser.add_argument("--before", default=None, type=valid_date,
-                        help="Fecha fin YYYY-MM-DD (para localizar carpeta semanal y salida)")
+    parser.add_argument("--since", required=True, type=valid_date,
+                        help="Fecha inicio YYYY-MM-DD (heredada del orquestador)")
+    parser.add_argument("--before", required=True, type=valid_date,
+                        help="Fecha fin YYYY-MM-DD (heredada del orquestador)")
     parser.add_argument("--batch-size", type=int, default=25,
                         help="URLs por batch (default: 25)")
     parser.add_argument("--token", default=None,
                         help="Apify API token (o variable APIFY_TOKEN)")
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_BASE_DIR,
-                        help="Directorio base de salida (se crea carpeta semanal adentro)")
+    parser.add_argument("--output-dir", required=True,
+                        help="Directorio base de salida (heredado del orquestador)")
     parser.add_argument("--prompt", action="store_true",
                         help="Fuerza modo interactivo (preguntas en consola)")
     parser.add_argument("--no-prompt", action="store_true",

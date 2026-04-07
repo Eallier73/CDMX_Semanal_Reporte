@@ -954,8 +954,8 @@ def parse_args():
         "-s",
         dest="fecha_inicio",
         type=valid_date,
-        default=FECHA_INICIO_EXACTA,
-        help="Fecha inicial global YYYY-MM-DD. Si se omite, usa la configurada en el script.",
+        required=True,
+        help="Fecha inicial global YYYY-MM-DD (heredada del orquestador)",
     )
     parser.add_argument(
         "--before",
@@ -963,8 +963,8 @@ def parse_args():
         "-b",
         dest="fecha_fin",
         type=valid_date,
-        default=FECHA_FIN_EXACTA,
-        help="Fecha final global YYYY-MM-DD. Si se omite, usa la configurada en el script.",
+        required=True,
+        help="Fecha final global YYYY-MM-DD (heredada del orquestador)",
     )
     parser.add_argument(
         "-m",
@@ -991,8 +991,8 @@ def parse_args():
     parser.add_argument(
         "-o",
         "--output-dir",
-        default=CARPETA_BASE_SEMANAL,
-        help="Carpeta base donde se guardan las semanas.",
+        required=True,
+        help="Carpeta base donde se guardan las semanas (heredada del orquestador)",
     )
     parser.add_argument(
         "--nombre-archivo-base",

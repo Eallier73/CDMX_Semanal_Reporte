@@ -352,10 +352,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--pages", nargs="+", default=DEFAULT_PAGES,
                         help="Paginas target (handles o URLs). Ej: --pages GobiernoCDMX ClaraBrugadaM")
-    parser.add_argument("--since", default=None, type=valid_date,
-                        help="Fecha inicio YYYY-MM-DD")
-    parser.add_argument("--before", default=None, type=valid_date,
-                        help="Fecha fin YYYY-MM-DD")
+    parser.add_argument("--since", required=True, type=valid_date,
+                        help="Fecha inicio YYYY-MM-DD (heredada del orquestador)")
+    parser.add_argument("--before", required=True, type=valid_date,
+                        help="Fecha fin YYYY-MM-DD (heredada del orquestador)")
     parser.add_argument("--max-posts", type=int, default=DEFAULT_RESULTS_LIMIT_PER_PAGE,
                         help="Maximo de posts por pagina target en el actor")
     parser.add_argument("--max-pages", type=int, default=None,
@@ -370,8 +370,8 @@ def parse_args() -> argparse.Namespace:
                         help="Paginas por batch de ejecucion (default: 10)")
     parser.add_argument("--token", default=None,
                         help="Apify API token (o variable APIFY_TOKEN)")
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_BASE_DIR,
-                        help="Directorio base de salida (se crea carpeta semanal adentro)")
+    parser.add_argument("--output-dir", required=True,
+                        help="Directorio base de salida (heredado del orquestador)")
     parser.add_argument("--prompt", action="store_true",
                         help="Forzar modo interactivo")
     parser.add_argument("--no-prompt", action="store_true",

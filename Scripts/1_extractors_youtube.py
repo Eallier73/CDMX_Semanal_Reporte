@@ -92,13 +92,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--queries", nargs="+", default=DEFAULT_SEARCH_QUERIES,
                         help="Consultas para buscar videos y extraer comentarios")
 
-    parser.add_argument("--since", type=valid_date, default=DEFAULT_START_DATE_STR,
-                        help="Fecha inicio YYYY-MM-DD")
-    parser.add_argument("--before", type=valid_date, default=DEFAULT_END_DATE_STR,
-                        help="Fecha fin YYYY-MM-DD")
+    parser.add_argument("--since", type=valid_date, required=True,
+                        help="Fecha inicio YYYY-MM-DD (heredado del orquestador)")
+    parser.add_argument("--before", type=valid_date, required=True,
+                        help="Fecha fin YYYY-MM-DD (heredado del orquestador)")
 
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_BASE_DIR,
-                        help="Directorio base de salida")
+    parser.add_argument("--output-dir", required=True,
+                        help="Directorio base de salida (heredado del orquestador)")
     parser.add_argument("--api-key", default=os.getenv("YOUTUBE_API_KEY", DEFAULT_API_KEY),
                         help="API key de YouTube Data API")
 

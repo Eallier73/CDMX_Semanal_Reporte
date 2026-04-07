@@ -548,8 +548,8 @@ def main():
     )
     parser.add_argument("fecha_inicio", nargs="?", help="Fecha inicio YYYY-MM-DD")
     parser.add_argument("fecha_fin", nargs="?", help="Fecha fin YYYY-MM-DD")
-    parser.add_argument("--since", dest="since", help="Fecha inicio YYYY-MM-DD")
-    parser.add_argument("--before", dest="before", help="Fecha fin YYYY-MM-DD")
+    parser.add_argument("--since", dest="since", required=True, help="Fecha inicio YYYY-MM-DD (heredado del orquestador)")
+    parser.add_argument("--before", dest="before", required=True, help="Fecha fin YYYY-MM-DD (heredado del orquestador)")
     parser.add_argument(
         "--query",
         dest="queries",
@@ -557,8 +557,8 @@ def main():
         default=[],
         help="Query de búsqueda base (repite --query para varias)"
     )
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_BASE_DIR),
-                        help="Directorio base de salida")
+    parser.add_argument("--output-dir", required=True,
+                        help="Directorio base de salida (heredado del orquestador)")
     parser.add_argument("--state-path", default=str(DEFAULT_STATE_PATH),
                         help="Ruta al storage_state de X/Twitter")
     parser.add_argument("--max-tweets", type=int, default=DEFAULT_MAX_TWEETS,
