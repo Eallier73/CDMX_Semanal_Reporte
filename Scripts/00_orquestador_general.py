@@ -59,11 +59,11 @@ class PipelineSpec:
 
 
 PIPELINES = [
-    PipelineSpec("1", "youtube", "YouTube", "01_youtube_tampico.py"),
-    PipelineSpec("2", "twitter", "Twitter/X", "02_twitter_tampico.py"),
-    PipelineSpec("3", "medios_tampico", "Medios Tampico", "03_medios_tampico.py"),
-    PipelineSpec("4", "facebook_comentarios", "Facebook desde CSV URLs", "04_facebook_comentarios_tampico.py"),
-    PipelineSpec("5", "facebook_posts", "Facebook posts", "05_facebook_posts_tampico.py"),
+    PipelineSpec("1", "youtube", "YouTube", "1_extractors_youtube.py"),
+    PipelineSpec("2", "twitter", "Twitter/X", "2_extractors_twitter.py"),
+    PipelineSpec("3", "medios_tampico", "Medios Tampico", "3_extractors_medios.py"),
+    PipelineSpec("4", "facebook_comentarios", "Facebook desde CSV URLs", "4_extractors_facebook_comentarios.py"),
+    PipelineSpec("5", "facebook_posts", "Facebook posts", "5_extractors_facebook_posts.py"),
 ]
 
 PIPELINES_BY_CODE = {item.code: item for item in PIPELINES}
@@ -192,7 +192,12 @@ def prompt_common_context() -> tuple[str, str]:
 
 def build_youtube(since: str, before: str) -> tuple[list[str], dict[str, str]]:
     print("\n=== YouTube ===")
-    mode = prompt_choice("Modo", ["ambos", "comentarios", "transcripciones"], "ambos")
+    print("  1) Transcripciones")
+    print("  2) Comentarios")
+    print("  3) Transcripciones y comentarios")
+    mode_choice = prompt_choice("Selecciona opción", ["1", "2", "3"], "3")
+    mode_map = {"1": "transcripciones", "2": "comentarios", "3": "ambos"}
+    mode = mode_map[mode_choice]
     channels = prompt_list("Canales YouTube separados por coma", DEFAULT_YOUTUBE_CHANNELS)
     queries = prompt_list("Queries de búsqueda separadas por coma", DEFAULT_YOUTUBE_QUERIES)
     max_videos_query = prompt_int("Máximo de videos por query", 200)
@@ -212,7 +217,7 @@ def build_youtube(since: str, before: str) -> tuple[list[str], dict[str, str]]:
 
     cmd = [
         sys.executable,
-        str(SCRIPTS_DIR / "01_youtube_tampico.py"),
+        str(SCRIPTS_DIR / "1_extractors_youtube.py"),
         "--since", since,
         "--before", before,
         "--output-dir", output_dir,
@@ -239,7 +244,7 @@ def build_twitter(since: str, before: str) -> tuple[list[str], dict[str, str]]:
 
     cmd = [
         sys.executable,
-        str(SCRIPTS_DIR / "02_twitter_tampico.py"),
+        str(SCRIPTS_DIR / "2_extractors_twitter.py"),
         "--since", since,
         "--before", before,
         "--output-dir", output_dir,
@@ -316,7 +321,7 @@ def build_facebook_comments_from_csv(since: str, before: str) -> tuple[list[str]
 
     cmd = [
         sys.executable,
-        str(SCRIPTS_DIR / "04_facebook_comentarios_tampico.py"),
+        str(SCRIPTS_DIR / "4_extractors_facebook_comentarios.py"),
         "--since", since,
         "--before", before,
         "--mode", mode,
@@ -350,7 +355,7 @@ def build_facebook_posts(since: str, before: str) -> tuple[list[str], dict[str, 
 
     cmd = [
         sys.executable,
-        str(SCRIPTS_DIR / "05_facebook_posts_tampico.py"),
+        str(SCRIPTS_DIR / "5_extractors_facebook_posts.py"),
         "--since", since,
         "--before", before,
         "--output-dir", output_dir,
