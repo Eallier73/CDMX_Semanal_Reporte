@@ -46,6 +46,11 @@ DEFAULT_MAX_TWEETS = 3000
 # Usuarios objetivo y términos principales
 TARGET_HANDLES = ["@MonicaVTampico", "@TampicoGob"]
 
+INSTITUTIONAL_POST_QUERIES = {
+    "from:TampicoGob",
+    "from:MonicaVTampico",
+}
+
 # Consultas base (sin rango de fechas)
 SEARCH_QUERIES = [
     "to:MonicaVTampico",
@@ -99,8 +104,9 @@ class TwitterExtractorIAD:
         # Crear directorio si no existe (normalmente ya debe existir por el main)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Archivo de salida
-        self.output_csv = self.output_dir / f"twitter_data_{self.nombre_semana}.csv"
+        # Archivos de salida segmentados por tipo de contenido
+        self.output_posts_institucionales_csv = self.output_dir / f"{self.nombre_semana}_post_institucionales.csv"
+        self.output_comentarios_csv = self.output_dir / f"{self.nombre_semana}_comentarios.csv"
         
         # Configuraciones
         self.max_tweets = max_tweets
@@ -122,7 +128,8 @@ class TwitterExtractorIAD:
         
         print(f"📅 Período: {self.fecha_inicio.date()} a {self.fecha_fin.date()}")
         print(f"📁 Carpeta: {self.nombre_semana}")
-        print(f"📂 Salida: {self.output_csv}")
+        print(f"📂 Salida institucional: {self.output_posts_institucionales_csv}")
+        print(f"📂 Salida comentarios: {self.output_comentarios_csv}")
         print(f"🔎 Queries base: {len(base_queries)}")
     
     def calcular_nombre_semana(self):
@@ -448,7 +455,7 @@ class TwitterExtractorIAD:
         return collected
     
     def save_to_csv(self, all_tweets):
-        """Guardar todos los tweets en CSV"""
+        """Guardar tweets en dos CSV: posts institucionales y comentarios."""
         if not all_tweets:
             print("⚠️  No hay tweets para guardar")
             return
@@ -460,16 +467,30 @@ class TwitterExtractorIAD:
             "views", "query_used", "is_reply", "in_reply_to_url"
         ]
         
-        with open(self.output_csv, "w", newline="", encoding="utf-8") as csvfile:
+        def _es_post_institucional(tweet: dict) -> bool:
+            query_used = str(tweet.get("query_used", "") or "")
+            return any(q in query_used for q in INSTITUTIONAL_POST_QUERIES)
+
+        posts_institucionales = [tweet for tweet in all_tweets if _es_post_institucional(tweet)]
+        comentarios = [tweet for tweet in all_tweets if not _es_post_institucional(tweet)]
+
+        with open(self.output_posts_institucionales_csv, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
-            
-            for tweet in all_tweets:
+            for tweet in posts_institucionales:
                 row = {field: tweet.get(field, "") for field in fieldnames}
                 writer.writerow(row)
-        
+
+        with open(self.output_comentarios_csv, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for tweet in comentarios:
+                row = {field: tweet.get(field, "") for field in fieldnames}
+                writer.writerow(row)
+
         print(f"✅ Twitter: {len(all_tweets)} tweets guardados")
-        print(f"📄 Archivo: {self.output_csv}")
+        print(f"   🏛️ Posts institucionales: {len(posts_institucionales)} -> {self.output_posts_institucionales_csv}")
+        print(f"   💬 Comentarios públicos: {len(comentarios)} -> {self.output_comentarios_csv}")
     
     async def run_extraction(self):
         """Ejecutar extracción completa"""
