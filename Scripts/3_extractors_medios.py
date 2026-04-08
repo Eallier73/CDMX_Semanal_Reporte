@@ -15,7 +15,7 @@ Versión adaptada: usa Google News RSS (gratuito, sin API key)
 en lugar de SerpAPI.
 
 Incluye Playwright como estrategia de descarga para sitios
-que requieren JavaScript rendering (ej. noticiasdetampico.mx).
+que requieren JavaScript rendering.
 =============================================================
 """
 
@@ -23,15 +23,16 @@ que requieren JavaScript rendering (ej. noticiasdetampico.mx).
 # CONFIGURACIÓN — solo edita esta sección
 # ============================================================
 MEDIOS = [
-    "site:oem.com.mx",
-    "site:milenio.com",
+    "site:www.milenio.com",
+    "site:www.jornada.com.mx",
     
 ]
 
 TERMINOS = [
-    '"Monica Villarreal"',
-    '"gobierno de tampico"',
-    '"tampico"',
+    '"clara brugada"',
+    '"jefa de gobierno"',
+    '"gobierno de cdmx"',
+    '"ciudad de mexico"',
 ]
 
 ANIO_INICIO = 2025
@@ -64,13 +65,14 @@ PLAYWRIGHT_PAUSA_ENTRE_PAGINAS = 1.5  # seg entre cada página (anti rate-limit)
 # y si fallan Y el dominio está en esta lista, usará Playwright.
 # Si no está en la lista, Playwright se usa como último recurso universal.
 DOMINIOS_PLAYWRIGHT_PRIORITARIO = [
-    "noticiasdetampico.mx",
+    "www.milenio.com",
+    "www.jornada.com.mx",
 ]
 
 # --- General ---
 OMITIR_SEMANAS_EXISTENTES = True
 CARPETA_BASE_SEMANAL = None
-NOMBRE_ARCHIVO_BASE = "noticias_tampico"
+NOMBRE_ARCHIVO_BASE = "noticias_cdmx"
 PAUSA = 2.0            # segundos entre requests de trafilatura
 PAUSA_ENTRE_QUERIES = 3.0   # segundos entre queries RSS (para no ser bloqueado)
 

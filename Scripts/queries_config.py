@@ -23,15 +23,18 @@ from __future__ import annotations
 # ============================================================================
 
 YOUTUBE_CHANNELS = [
-    "monicavtampico",
+    "GobCDMX",
+    "ClaraBrugadaM",
 ]
 """Canales de YouTube a monitorear (sin @)"""
 
 YOUTUBE_SEARCH_QUERIES = [
-    "presidenta municipal de Tampico",
-    "Presidenta municipal de Tampico",
-    "Gobierno de Tampico",
-    "gobierno de Tampico",
+    "jefa de gobierno",
+    "clara brugada",
+    "cdmx",
+    "ciudad de mexico",
+    "gobierno de CDMX",
+    "gobierno de la ciudad de mexico",
 ]
 """Consultas para buscar videos en YouTube"""
 
@@ -47,15 +50,14 @@ YOUTUBE_DEFAULT_MAX_VIDEOS_CHANNEL = 300
 # ============================================================================
 
 TWITTER_SEARCH_QUERIES = [
-    "to:MonicaVTampico",
-    "from:MonicaVTampico",
-    "to:TampicoGob",
-    "from:TampicoGob",
-    "@TampicoGob",
-    "@MonicaVTampico",
-    "monica villarreal",
-    "gobierno de tampico",
-    "tampico",
+    "from:ClaraBrugadaM",
+    "from:GobCDMX",
+    "jefa de gobierno",
+    "clara brugada",
+    "cdmx",
+    "ciudad de mexico",
+    "gobierno de CDMX",
+    "gobierno de la ciudad de mexico",
 ]
 """Queries para buscar tweets en Twitter/X"""
 
@@ -74,15 +76,16 @@ TWITTER_DEFAULT_MAX_REPLY_SCROLLS = 8
 # ============================================================================
 
 MEDIOS_SITES = [
-    "site:oem.com.mx",
-    "site:milenio.com",
+    "site:www.milenio.com",
+    "site:www.jornada.com.mx",
 ]
 """Sitios de medios a monitorear para noticias"""
 
 MEDIOS_SEARCH_TERMS = [
-    '"Monica Villarreal"',
-    '"gobierno de tampico"',
-    '"tampico"',
+    '"clara brugada"',
+    '"jefa de gobierno"',
+    '"gobierno de cdmx"',
+    '"ciudad de mexico"',
 ]
 """Términos de búsqueda para noticias"""
 
@@ -101,8 +104,8 @@ MEDIOS_DEFAULT_PAUSE_BETWEEN_RSS_QUERIES = 3.0
 # ============================================================================
 
 FACEBOOK_PAGES = [
-    "TampicoGob",
-    "monicavtampico",
+    "GobiernoCDMX",
+    "ClaraBrugadaM",
 ]
 """Páginas de Facebook a monitorear (handles o URLs)"""
 

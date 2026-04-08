@@ -25,7 +25,7 @@ cp .env.example .env.local
 Luego edita `.env.local`:
 ```env
 YOUTUBE_API_KEY=AIzaSyADmTxdJGJN9_wwahbt-qD0OtaqlEmTKEM
-APIFY_TOKEN=deehfWWhKe2lCMbJ4Zs2FgowO3paOC0x0Jql
+APIFY_TOKEN=apify_api_deehfWWhKe2lCMbJ4Zs2FgowO3paOC0x0Jql
 ```
 
 ## Paso 2: Obtener Credenciales

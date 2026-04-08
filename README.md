@@ -1,6 +1,6 @@
-# Tampico_Semanal_Reportes
+# CDMX_Semanal_Reporte
 
-Repo base para descargar datos semanales de redes y medios en Tampico, y dejar la salida lista para procesos posteriores de NLP, homologación y análisis.
+Repo base para descargar datos semanales de redes y medios sobre el Gobierno de la CDMX, y dejar la salida lista para procesos posteriores de NLP, homologación y análisis.
 
 ## Alcance
 
@@ -15,7 +15,7 @@ Este repo parte de `Datos_Radar`, pero quedó limpiado para uso operativo:
 ## Estructura
 
 ```text
-Tampico_Semanal_Reportes/
+CDMX_Semanal_Reporte/
 ├── Datos/
 ├── Facebook/
 ├── Medios/
@@ -28,11 +28,11 @@ Tampico_Semanal_Reportes/
 ## Scripts incluidos
 
 - `Scripts/00_orquestador_general.py`
-- `Scripts/01_youtube_tampico.py`
-- `Scripts/02_twitter_tampico.py`
-- `Scripts/03_medios_tampico.py`
-- `Scripts/04_facebook_comentarios_tampico.py`
-- `Scripts/05_facebook_posts_tampico.py`
+- `Scripts/1_extractors_youtube.py`
+- `Scripts/2_extractors_twitter.py`
+- `Scripts/3_extractors_medios.py`
+- `Scripts/4_extractors_facebook_posts.py`
+- `Scripts/5_extractors_facebook_comentarios.py`
 
 ## Variables de entorno
 

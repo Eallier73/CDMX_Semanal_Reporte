@@ -4,11 +4,11 @@ Este documento resume, script por script, qué argumentos conviene pedir desde e
 
 ## Convención de nombres
 
-- `01_youtube_tampico.py`
-- `02_twitter_tampico.py`
-- `03_medios_tampico.py`
-- `04_facebook_comentarios_tampico.py`
-- `05_facebook_posts_tampico.py`
+- `1_extractors_youtube.py`
+- `2_extractors_twitter.py`
+- `3_extractors_medios.py`
+- `4_extractors_facebook_posts.py`
+- `5_extractors_facebook_comentarios.py`
 - `00_orquestador_general.py`
 
 ## 01 YouTube
@@ -44,7 +44,7 @@ Este documento resume, script por script, qué argumentos conviene pedir desde e
 - Requisito operativo:
   - `state/x_state.json`
 
-## 03 Medios Tampico
+## 03 Medios CDMX
 
 - Prompt propio previo: no.
 - Argumentos clave:

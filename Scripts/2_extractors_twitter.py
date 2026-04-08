@@ -34,7 +34,7 @@ except Exception as exc:
     PLAYWRIGHT_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 # =========================
-# CONFIGURACIÓN TAMPICO
+# CONFIGURACIÓN CDMX
 # =========================
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_BASE_DIR = REPO_ROOT / "Twitter"
@@ -44,24 +44,23 @@ CONFIG_END_DATE_STR = "2026-03-31"
 DEFAULT_MAX_TWEETS = 3000
 
 # Usuarios objetivo y términos principales
-TARGET_HANDLES = ["@MonicaVTampico", "@TampicoGob"]
+TARGET_HANDLES = ["@ClaraBrugadaM", "@GobCDMX"]
 
 INSTITUTIONAL_POST_QUERIES = {
-    "from:TampicoGob",
-    "from:MonicaVTampico",
+    "from:GobCDMX",
+    "from:ClaraBrugadaM",
 }
 
 # Consultas base (sin rango de fechas)
 SEARCH_QUERIES = [
-    "to:MonicaVTampico",
-    "from:MonicaVTampico",
-    "to:TampicoGob",
-    "from:TampicoGob",
-    "@TampicoGob",
-    "@MonicaVTampico",
-    "monica villarreal",
-    "gobierno de tampico",
-    "tampico"
+    "from:ClaraBrugadaM",
+    "from:GobCDMX",
+    "jefa de gobierno",
+    "clara brugada",
+    "cdmx",
+    "ciudad de mexico",
+    "gobierno de CDMX",
+    "gobierno de la ciudad de mexico",
 ]
 
 # Respuestas
@@ -106,7 +105,9 @@ class TwitterExtractorIAD:
         
         # Archivos de salida segmentados por tipo de contenido
         self.output_posts_institucionales_csv = self.output_dir / f"{self.nombre_semana}_post_institucionales.csv"
+        self.output_posts_institucionales_txt = self.output_dir / f"{self.nombre_semana}_post_institucionales.txt"
         self.output_comentarios_csv = self.output_dir / f"{self.nombre_semana}_comentarios.csv"
+        self.output_comentarios_txt = self.output_dir / f"{self.nombre_semana}_comentarios.txt"
         
         # Configuraciones
         self.max_tweets = max_tweets
@@ -481,12 +482,24 @@ class TwitterExtractorIAD:
                 row = {field: tweet.get(field, "") for field in fieldnames}
                 writer.writerow(row)
 
+        with open(self.output_posts_institucionales_txt, "w", encoding="utf-8") as f:
+            for tweet in posts_institucionales:
+                clean = self.clean_text(tweet.get("text", ""))
+                if clean:
+                    f.write(clean + "\n")
+
         with open(self.output_comentarios_csv, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             for tweet in comentarios:
                 row = {field: tweet.get(field, "") for field in fieldnames}
                 writer.writerow(row)
+
+        with open(self.output_comentarios_txt, "w", encoding="utf-8") as f:
+            for tweet in comentarios:
+                clean = self.clean_text(tweet.get("text", ""))
+                if clean:
+                    f.write(clean + "\n")
 
         print(f"✅ Twitter: {len(all_tweets)} tweets guardados")
         print(f"   🏛️ Posts institucionales: {len(posts_institucionales)} -> {self.output_posts_institucionales_csv}")

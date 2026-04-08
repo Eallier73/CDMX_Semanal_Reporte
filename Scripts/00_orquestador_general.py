@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Orquestador general para los pipelines semanales de Tampico.
+Orquestador general para los pipelines semanales de CDMX.
 
 Objetivo:
 - Centralizar la captura de argumentos en un solo prompt.
@@ -54,7 +54,7 @@ DEFAULT_YOUTUBE_QUERIES = YOUTUBE_SEARCH_QUERIES
 DEFAULT_TWITTER_QUERIES = TWITTER_SEARCH_QUERIES
 DEFAULT_FB_PAGES = FACEBOOK_PAGES
 DEFAULT_MEDIOS_SITES = MEDIOS_SITES
-DEFAULT_TERMS_TAMPICO = MEDIOS_SEARCH_TERMS
+DEFAULT_TERMS_CDMX = MEDIOS_SEARCH_TERMS
 
 
 @dataclass(frozen=True)
@@ -68,9 +68,9 @@ class PipelineSpec:
 PIPELINES = [
     PipelineSpec("1", "youtube", "YouTube", "1_extractors_youtube.py"),
     PipelineSpec("2", "twitter", "Twitter/X", "2_extractors_twitter.py"),
-    PipelineSpec("3", "medios_tampico", "Medios Tampico", "3_extractors_medios.py"),
-    PipelineSpec("4", "facebook_posts", "Facebook Posts (incluye URL)", "5_extractors_facebook_posts.py"),
-    PipelineSpec("5", "facebook_comentarios", "Facebook Comentarios (desde posts)", "4_extractors_facebook_comentarios.py"),
+    PipelineSpec("3", "medios_cdmx", "Medios CDMX", "3_extractors_medios.py"),
+    PipelineSpec("4", "facebook_posts", "Facebook Posts (incluye URL)", "4_extractors_facebook_posts.py"),
+    PipelineSpec("5", "facebook_comentarios", "Facebook Comentarios (desde posts)", "5_extractors_facebook_comentarios.py"),
 ]
 
 PIPELINES_BY_CODE = {item.code: item for item in PIPELINES}
@@ -432,7 +432,7 @@ def build_facebook_posts(since: str, before: str, use_defaults: bool = False) ->
 
     cmd = [
         sys.executable,
-        str(SCRIPTS_DIR / "5_extractors_facebook_posts.py"),
+        str(SCRIPTS_DIR / "4_extractors_facebook_posts.py"),
         "--since", since,
         "--before", before,
         "--output-dir", output_dir,
@@ -479,7 +479,7 @@ def build_facebook_comentarios(since: str, before: str, use_defaults: bool = Fal
 
     cmd = [
         sys.executable,
-        str(SCRIPTS_DIR / "4_extractors_facebook_comentarios.py"),
+        str(SCRIPTS_DIR / "5_extractors_facebook_comentarios.py"),
         "--since", since,
         "--before", before,
         "--output-dir", output_dir,
@@ -500,13 +500,13 @@ def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bo
         return build_youtube(since, before, use_defaults)
     if spec.key == "twitter":
         return build_twitter(since, before, use_defaults)
-    if spec.key == "medios_tampico":
+    if spec.key == "medios_cdmx":
         return build_medios(
             spec.filename,
             spec.label,
-            DEFAULT_TERMS_TAMPICO,
+            DEFAULT_TERMS_CDMX,
             str(REPO_ROOT / "Medios"),
-            "noticias_tampico",
+            "noticias_cdmx",
             since,
             before,
             use_defaults,
@@ -533,7 +533,7 @@ def _source_label_for_spec(spec: PipelineSpec) -> str | None:
     labels = {
         "youtube": "Youtube",
         "twitter": "Twitter",
-        "medios_tampico": "Medios",
+        "medios_cdmx": "Medios",
         "facebook_posts": "Facebook",
         "facebook_comentarios": "Facebook",
     }
@@ -549,7 +549,7 @@ def weekly_output_dir_for_command(spec: PipelineSpec, since: str, cmd: list[str]
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Orquestador general de pipelines Tampico")
+    parser = argparse.ArgumentParser(description="Orquestador general de pipelines CDMX")
     parser.add_argument("--dry-run", action="store_true", help="Solo imprime comandos, no los ejecuta")
     args = parser.parse_args()
 
@@ -676,25 +676,26 @@ def main() -> None:
         if result.returncode == 0:
             print(f"✅ {spec.label} completado")
             
-            # Si es el extractor de Posts (4), intentar encontrar el CSV generado
+            # Si es el extractor de Posts (4), calcular el path del CSV generado
             if spec.code == "4":
-                facebook_dir = REPO_ROOT / "Facebook"
-                # Buscar el CSV más reciente con patrón [tag]_posts.csv
-                import glob
-                pattern = str(facebook_dir / "*" / "*_posts.csv")
-                csv_files = glob.glob(pattern)
-                if csv_files:
-                    # Usar el más reciente
-                    facebook_posts_csv = max(csv_files, key=os.path.getmtime)
-                    print(f"   📄 CSV detectado: {facebook_posts_csv}")
-                    
-                    # Actualizar comandos pendientes de 5 para usar este CSV
-                    for i, (pending_spec, pending_cmd, _) in enumerate(prepared[prepared.index((spec, cmd, env_overrides))+1:], 
-                                                                         start=prepared.index((spec, cmd, env_overrides))+1):
-                        if pending_spec.code == "5":
-                            if "--input-csv" not in pending_cmd:
-                                pending_cmd.extend(["--input-csv", facebook_posts_csv])
-                                prepared[i] = (pending_spec, pending_cmd, prepared[i][2])
+                output_dir_arg = _extract_flag_value(cmd, "--output-dir") or str(REPO_ROOT / "Facebook")
+                since_arg = _extract_flag_value(cmd, "--since") or since
+                report_tag = build_report_tag(since_arg, "Facebook")
+                facebook_posts_csv = str(Path(output_dir_arg) / report_tag / f"{report_tag}_posts.csv")
+                if os.path.exists(facebook_posts_csv):
+                    print(f"   📄 CSV de posts: {facebook_posts_csv}")
+                else:
+                    print(f"   ⚠️  CSV esperado no encontrado: {facebook_posts_csv}")
+                    facebook_posts_csv = ""
+
+                # Inyectar --input-csv en los comandos pendientes del extractor 5
+                current_idx = next(i for i, (s, _, __) in enumerate(prepared) if s.code == "4" and s is spec)
+                for i in range(current_idx + 1, len(prepared)):
+                    pending_spec, pending_cmd, pending_env = prepared[i]
+                    if pending_spec.code == "5" and facebook_posts_csv:
+                        if "--input-csv" not in pending_cmd:
+                            pending_cmd.extend(["--input-csv", facebook_posts_csv])
+                            prepared[i] = (pending_spec, pending_cmd, pending_env)
             continue
 
         print(f"❌ {spec.label} falló con código {result.returncode}")

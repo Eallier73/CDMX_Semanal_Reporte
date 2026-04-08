@@ -61,13 +61,15 @@ DEFAULT_END_DATE_STR = "2026-03-31"
 DEFAULT_RANGE_DAYS = 15
 
 DEFAULT_SEARCH_QUERIES = [
-    "presidenta municipal de Tampico",
-    "Presidenta municipal de Tampico",
-    "Gobierno de Tampico",
-    "gobierno de Tampico",
+    "jefa de gobierno",
+    "clara brugada",
+    "cdmx",
+    "ciudad de mexico",
+    "gobierno de CDMX",
+    "gobierno de la ciudad de mexico",
 ]
 
-DEFAULT_CHANNEL_HANDLES = ["monicavtampico"]
+DEFAULT_CHANNEL_HANDLES = ["GobCDMX", "ClaraBrugadaM"]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_BASE_DIR = str(REPO_ROOT / "Youtube")
