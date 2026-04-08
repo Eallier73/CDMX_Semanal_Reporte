@@ -71,6 +71,10 @@ PIPELINES = [
     PipelineSpec("3", "medios_cdmx", "Medios CDMX", "3_extractors_medios.py"),
     PipelineSpec("4", "facebook_posts", "Facebook Posts (incluye URL)", "4_extractors_facebook_posts.py"),
     PipelineSpec("5", "facebook_comentarios", "Facebook Comentarios (desde posts)", "5_extractors_facebook_comentarios.py"),
+    PipelineSpec("6", "consolidador_datos", "Consolidador de Datos", "6_consolidador_datos.py"),
+    PipelineSpec("7", "claude_nlp", "Modelado Tematico con Claude", "7_modelado_temas_claude.py"),
+    PipelineSpec("8", "influencia_temas", "Analisis de Influencia de Temas", "8_influencia_temas.py"),
+    PipelineSpec("9", "temas_guiados", "Analisis de Temas Guiados", "9_temas_guiados.py"),
 ]
 
 PIPELINES_BY_CODE = {item.code: item for item in PIPELINES}
@@ -495,6 +499,119 @@ def build_facebook_comentarios(since: str, before: str, use_defaults: bool = Fal
     return cmd, env
 
 
+def build_consolidador_datos(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        base_dir = str(REPO_ROOT)
+        output_dir = str(REPO_ROOT / "Datos")
+    else:
+        print("\n=== Consolidador de Datos ===")
+        base_dir = prompt_text("Raiz del repositorio", str(REPO_ROOT))
+        output_dir = prompt_text("Directorio base de salida para datos", str(REPO_ROOT / "Datos"))
+
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "6_consolidador_datos.py"),
+        "--since", since,
+        "--before", before,
+        "--base-dir", base_dir,
+        "--output-dir", output_dir,
+    ]
+    return cmd, {}
+
+
+def build_claude_nlp(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        input_dir = str(REPO_ROOT / "Datos")
+        output_dir = str(REPO_ROOT / "Claude")
+        model = "claude-opus-4-6"
+        max_corpus_chars = 650000
+        claude_api_key = ""
+    else:
+        print("\n=== Modelado Tematico con Claude ===")
+        input_dir = prompt_text("Directorio base de entrada (Datos)", str(REPO_ROOT / "Datos"))
+        output_dir = prompt_text("Directorio base de salida (Claude)", str(REPO_ROOT / "Claude"))
+        model = prompt_text("Modelo Claude", "claude-opus-4-6")
+        max_corpus_chars = prompt_int("Maximo de caracteres a enviar", 650000)
+        claude_api_key = prompt_secret("Claude API key", "CLAUDE_API_KEY", required=True)
+
+    env = {}
+    if not use_defaults and claude_api_key:
+        if claude_api_key != os.getenv("CLAUDE_API_KEY", ""):
+            env["CLAUDE_API_KEY"] = claude_api_key
+
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "7_modelado_temas_claude.py"),
+        "--since", since,
+        "--before", before,
+        "--input-dir", input_dir,
+        "--output-dir", output_dir,
+        "--model", model,
+        "--max-corpus-chars", str(max_corpus_chars),
+    ]
+    return cmd, env
+
+
+def build_influencia_temas(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        input_dir = str(REPO_ROOT / "Datos")
+        output_dir = str(REPO_ROOT / "Influencia_Temas")
+        stopwords_path = str(REPO_ROOT / "Scripts" / "diccionarios" / "stopwords" / "stop_list_espanol.txt")
+    else:
+        print("\n=== Analisis de Influencia de Temas ===")
+        input_dir = prompt_text("Directorio base de entrada (Datos)", str(REPO_ROOT / "Datos"))
+        output_dir = prompt_text("Directorio base de salida (Influencia_Temas)", str(REPO_ROOT / "Influencia_Temas"))
+        stopwords_path = prompt_text(
+            "Ruta de stopwords",
+            str(REPO_ROOT / "Scripts" / "diccionarios" / "stopwords" / "stop_list_espanol.txt"),
+        )
+
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "8_influencia_temas.py"),
+        "--since", since,
+        "--before", before,
+        "--input-dir", input_dir,
+        "--output-dir", output_dir,
+        "--stopwords-path", stopwords_path,
+    ]
+    return cmd, {}
+
+
+def build_temas_guiados(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        input_dir = str(REPO_ROOT / "Datos")
+        output_dir = str(REPO_ROOT / "Temas_Guiados")
+        exclude_words_path = str(REPO_ROOT / "Scripts" / "diccionarios" / "stopwords" / "stop_list_espanol.txt")
+        input_file = ""
+    else:
+        print("\n=== Analisis de Temas Guiados ===")
+        input_dir = prompt_text("Directorio base de entrada (Datos)", str(REPO_ROOT / "Datos"))
+        output_dir = prompt_text("Directorio base de salida (Temas_Guiados)", str(REPO_ROOT / "Temas_Guiados"))
+        exclude_words_path = prompt_text(
+            "Ruta de palabras a excluir",
+            str(REPO_ROOT / "Scripts" / "diccionarios" / "stopwords" / "stop_list_espanol.txt"),
+        )
+        input_file = prompt_text(
+            "Archivo de entrada opcional (deja vacio para usar materiales del consolidador)",
+            "",
+            allow_blank=True,
+        )
+
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "9_temas_guiados.py"),
+        "--since", since,
+        "--before", before,
+        "--input-dir", input_dir,
+        "--output-dir", output_dir,
+        "--exclude-words-path", exclude_words_path,
+    ]
+    if input_file:
+        cmd.extend(["--input-file", input_file])
+    return cmd, {}
+
+
 def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bool = False, facebook_posts_csv: str = "") -> tuple[list[str], dict[str, str]]:
     if spec.key == "youtube":
         return build_youtube(since, before, use_defaults)
@@ -515,6 +632,14 @@ def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bo
         return build_facebook_posts(since, before, use_defaults)
     if spec.key == "facebook_comentarios":
         return build_facebook_comentarios(since, before, use_defaults, facebook_posts_csv)
+    if spec.key == "consolidador_datos":
+        return build_consolidador_datos(since, before, use_defaults)
+    if spec.key == "claude_nlp":
+        return build_claude_nlp(since, before, use_defaults)
+    if spec.key == "influencia_temas":
+        return build_influencia_temas(since, before, use_defaults)
+    if spec.key == "temas_guiados":
+        return build_temas_guiados(since, before, use_defaults)
     raise ValueError(f"Pipeline no soportado: {spec.key}")
 
 
@@ -536,8 +661,18 @@ def _source_label_for_spec(spec: PipelineSpec) -> str | None:
         "medios_cdmx": "Medios",
         "facebook_posts": "Facebook",
         "facebook_comentarios": "Facebook",
+        "consolidador_datos": "Datos",
+        "claude_nlp": "Claude",
+        "influencia_temas": "Influencia_Temas",
+        "temas_guiados": "Temas_Guiados",
     }
     return labels.get(spec.key)
+
+
+def _weekly_datos_dir_from_consolidador_cmd(since: str, cmd: list[str]) -> Path:
+    output_dir_arg = _extract_flag_value(cmd, "--output-dir") or str(REPO_ROOT / "Datos")
+    datos_tag = build_report_tag(since, "Datos")
+    return Path(output_dir_arg) / datos_tag
 
 
 def weekly_output_dir_for_command(spec: PipelineSpec, since: str, cmd: list[str]) -> Path | None:
@@ -587,6 +722,29 @@ def main() -> None:
         facebook_posts_spec = PIPELINES_BY_CODE["4"]
         selected = [s for s in selected if s.code != "4"]  # Remover duplicados si existe
         selected.insert(0, facebook_posts_spec)  # Agregar al inicio
+
+    required_by_consolidador = {
+        "7": "Claude",
+        "8": "Influencia Temas",
+        "9": "Temas Guiados",
+    }
+    for dependent_code, dependent_label in required_by_consolidador.items():
+        selected_codes = {s.code for s in selected}
+        if dependent_code in selected_codes and "6" not in selected_codes:
+            print(f"\n⚠️  El pipeline {dependent_code} ({dependent_label}) requiere los materiales generados por el 6 (Consolidador).")
+            print(f"   Se ejecutará automáticamente el 6 antes del {dependent_code}.")
+            consolidador_spec = PIPELINES_BY_CODE["6"]
+            insert_at = next((index for index, item in enumerate(selected) if item.code == dependent_code), len(selected))
+            selected.insert(insert_at, consolidador_spec)
+
+        selected_codes = {s.code for s in selected}
+        if "6" in selected_codes and dependent_code in selected_codes:
+            index_6 = next((index for index, item in enumerate(selected) if item.code == "6"), None)
+            index_dep = next((index for index, item in enumerate(selected) if item.code == dependent_code), None)
+            if index_6 is not None and index_dep is not None and index_6 > index_dep:
+                consolidador_spec = selected.pop(index_6)
+                index_dep = next(index for index, item in enumerate(selected) if item.code == dependent_code)
+                selected.insert(index_dep, consolidador_spec)
     
     # 4️⃣ PASO 4: Configurar según modo
     facebook_posts_csv = ""  # CSV generado por el extractor de posts
@@ -675,7 +833,23 @@ def main() -> None:
         result = subprocess.run(cmd, env=env, cwd=str(REPO_ROOT))
         if result.returncode == 0:
             print(f"✅ {spec.label} completado")
-            
+
+            # Si se ejecuta el consolidado, limpiar automaticamente los dos txt semanales de Datos.
+            if spec.code == "6":
+                datos_dir = _weekly_datos_dir_from_consolidador_cmd(since, cmd)
+                limpieza_cmd = [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "limpieza_texto.py"),
+                    "--datos-dir",
+                    str(datos_dir),
+                ]
+                print(f"🧼 Ejecutando limpieza de texto: {datos_dir}")
+                limpieza_result = subprocess.run(limpieza_cmd, env=env, cwd=str(REPO_ROOT))
+                if limpieza_result.returncode == 0:
+                    print("✅ Limpieza de texto completada")
+                else:
+                    print(f"⚠️ Limpieza de texto falló con código {limpieza_result.returncode}")
+
             # Si es el extractor de Posts (4), calcular el path del CSV generado
             if spec.code == "4":
                 output_dir_arg = _extract_flag_value(cmd, "--output-dir") or str(REPO_ROOT / "Facebook")

@@ -5,6 +5,13 @@ __pycache__/
 .env.*
 !.env.example
 
+# Secretos locales (Apify / APIs)
+.env.local
+.apify/
+apify_token.local
+apify_token.txt
+*.apify.token
+
 Datos/**
 !Datos/.gitkeep
 
@@ -29,3 +36,6 @@ state/x_state.local.json
 
 .idea/
 .vscode/
+
+Claude/**
+!Claude/.gitkeep
