@@ -55,26 +55,36 @@ Donde:
 Define las credenciales antes de correr los extractores:
 
 ```bash
-export YOUTUBE_API_KEY=""
-export APIFY_TOKEN=""
-export CLAUDE_API_KEY=""
+cp .env.example .env.local
 ```
 
-Opcionales para YouTube:
+Variables requeridas según pipeline:
 
 ```bash
-export YT_PROXY_HTTP=""
-export YT_PROXY_HTTPS=""
+YOUTUBE_API_KEY=""
+APIFY_TOKEN=""
+CLAUDE_API_KEY=""
 ```
+
+Variables opcionales para YouTube:
+
+```bash
+YT_PROXY_HTTP=""
+YT_PROXY_HTTPS=""
+```
+
+Además, el pipeline de X/Twitter requiere un archivo local `state/x_state.json` con un `storage_state` válido. Ese archivo no va en Git.
 
 ## Instalación rápida
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 playwright install chromium
 ```
+
+`requirements.txt` cubre las librerías usadas por los scripts: `anthropic`, `apify-client`, `cloudscraper`, `google-api-python-client`, `googlenewsdecoder`, `matplotlib`, `numpy`, `pandas`, `playwright`, `python-docx`, `python-dotenv`, `requests`, `scikit-learn`, `trafilatura` y `youtube-transcript-api`.
 
 ## Uso recomendado
 
@@ -156,6 +166,7 @@ Estos ejemplos corresponden al valor que capturas en el prompt `Selecciona pipel
 ## Notas operativas
 
 - `state/x_state.example.json` es solo una referencia. Debes crear `state/x_state.json` con un `storage_state` válido para correr el extractor de X/Twitter.
+- `.env.local` y `state/x_state.json` están ignorados por `.gitignore`; `.env.example` sí se versiona como plantilla.
 - Las salidas semanales se generan dentro de `Facebook/`, `Medios/`, `Twitter/`, `Youtube/` y `Claude/`, usando carpetas etiquetadas por semana.
 - La carpeta `Influencia_Temas/{semana}/` contiene analisis correlacional de temas sobre polaridad con reportes tecnicos (CSVs) y ejecutivos (KPIs, hallazgos, alertas).
 - El pipeline 8 (Analisis de Influencia) requiere que se ejecute primero el pipeline 6 (Consolidador) para generar `material_institucional.txt` e `material_comentarios.txt`.

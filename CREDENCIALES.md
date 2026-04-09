@@ -1,126 +1,139 @@
-# Configuración de Credenciales API
+# Configuración de credenciales y estado local
 
-## Descripción General
+Este repo usa dos tipos de secretos locales:
 
-Las credenciales de API (YouTube API key, Apify token) se cargan automáticamente desde el archivo `.env.local` que está ignorado en Git.
+- Variables de entorno en `.env.local`
+- Un `storage_state` local para X/Twitter en `state/x_state.json`
 
-## Estructura de Archivos
+Ambos están ignorados por Git. La plantilla versionada es `.env.example`.
 
+## Archivos relevantes
+
+```text
+CDMX_Semanal_Reporte/
+├── .env.example          ← plantilla versionada
+├── .env.local            ← secretos reales, ignorado por Git
+└── state/
+    ├── x_state.example.json
+    └── x_state.json      ← login real de X/Twitter, ignorado por Git
 ```
-Proyecto/
-├── .env.example          ← Template (versionado en Git)
-├── .env.local           ← Credenciales reales (ignorado en Git) ⚠️
-└── Scripts/
-    └── 00_orquestador_general.py  ← Carga las variables
-```
 
-## Paso 1: Crear .env.local
+## Credenciales requeridas
 
-Copia el template y agrega tus credenciales:
+### `.env.local`
+
+Crea el archivo a partir de la plantilla:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Luego edita `.env.local`:
+Contenido esperado:
+
 ```env
-YOUTUBE_API_KEY=AIzaSyADmTxdJGJN9_wwahbt-qD0OtaqlEmTKEM
-APIFY_TOKEN=apify_api_deehfWWhKe2lCMbJ4Zs2FgowO3paOC0x0Jql
+YOUTUBE_API_KEY=tu_youtube_api_key
+APIFY_TOKEN=tu_apify_token
+YT_PROXY_HTTP=
+YT_PROXY_HTTPS=
+CLAUDE_API_KEY=tu_claude_api_key
 ```
 
-## Paso 2: Obtener Credenciales
+Uso por pipeline:
 
-### YouTube API Key
-1. Ve a [Google Cloud Console](https://console.developers.google.com/)
-2. Crea un nuevo proyecto
-3. Habilita la API de YouTube Data v3
-4. Crea una credencial de tipo "API Key"
-5. Copia la key a `.env.local`
+- `YOUTUBE_API_KEY`: pipeline `1`
+- `APIFY_TOKEN`: pipelines `4` y `5`
+- `CLAUDE_API_KEY`: pipelines `7` y `10`
+- `YT_PROXY_HTTP` y `YT_PROXY_HTTPS`: opcionales para `1`
 
-### Apify Token
-1. Ve a [Apify Account](https://my.apify.com/account/integrations/api)
-2. En "Your personal API token", copia tu token
-3. Pégalo en `.env.local`
+### `state/x_state.json`
 
-## Cómo Funciona
+El pipeline `2` no usa API key. Usa una sesión local de X/Twitter guardada en:
 
-### Carga Automática
-El orquestador carga las variables al iniciar:
+```text
+state/x_state.json
+```
 
-```python
+Ese archivo debe contener un `storage_state` válido de Playwright. `state/x_state.example.json` es solo referencia estructural.
+
+Uso por pipeline:
+
+- `state/x_state.json`: pipeline `2`
+
+## Dónde obtener cada credencial
+
+### YouTube API
+
+1. Entra a [Google Cloud Console](https://console.developers.google.com/).
+2. Crea o selecciona un proyecto.
+3. Habilita `YouTube Data API v3`.
+4. Genera una API key.
+5. Guárdala como `YOUTUBE_API_KEY`.
+
+### Apify
+
+1. Entra a [Apify Console](https://my.apify.com/account/integrations/api).
+2. Copia tu token personal.
+3. Guárdalo como `APIFY_TOKEN`.
+
+### Claude / Anthropic
+
+1. Entra a [Anthropic Console](https://console.anthropic.com/).
+2. Genera o copia tu API key.
+3. Guárdala como `CLAUDE_API_KEY`.
+
+### X/Twitter `storage_state`
+
+1. Inicia sesión manualmente en X/Twitter con Playwright o con el flujo que uses internamente.
+2. Exporta el `storage_state`.
+3. Guarda el archivo como `state/x_state.json`.
+
+## Verificación rápida
+
+### Verificar presencia de variables
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv('.env.local')  # Carga YOUTUBE_API_KEY y APIFY_TOKEN
+import os
+
+load_dotenv(".env.local")
+for name in ["YOUTUBE_API_KEY", "APIFY_TOKEN", "CLAUDE_API_KEY", "YT_PROXY_HTTP", "YT_PROXY_HTTPS"]:
+    print(f"{name}: {'OK' if os.getenv(name) else 'VACIO'}")
+print(f"state/x_state.json: {'OK' if Path('state/x_state.json').exists() else 'FALTA'}")
+PY
 ```
 
-### En Modo Genérico
-Usa automáticamente las credenciales del `.env.local`:
-```
-Usuario ejecuta: python3 Scripts/00_orquestador_general.py
-→ Se carga .env.local
-→ Selecciona "2) PARA TODAS LAS REDES"
-→ Extrae datos sin pedir credenciales
-```
+### Verificar que Git no los versiona
 
-### En Modo Específico
-Pide confirmación de credenciales:
-```
-Usuario ejecuta: python3 Scripts/00_orquestador_general.py
-→ Se carga .env.local
-→ Selecciona "1) POR RED"
-→ Para YouTube: "¿YouTube API key?" (sugiere la del .env.local)
-→ Para Facebook: "¿Apify token?" (sugiere el del .env.local)
+```bash
+git check-ignore -v .env.local state/x_state.json
 ```
 
 ## Seguridad
 
-✅ **Protegido:**
-- `.env.local` está en `.gitignore` → NO se sube a GitHub
-- Credenciales nunca se guardan en commits
-- Solo existen en tu máquina local
+- No guardes secretos reales en `README.md`, `CREDENCIALES.md` ni en ejemplos commiteados.
+- `.env.local` está ignorado por `.gitignore`.
+- `state/x_state.json` está ignorado por `.gitignore`.
+- `.env.example` debe contener solo placeholders.
 
-⚠️ **Importante:**
-- NUNCA comitees `.env.local`
-- Si accidentalmente lo hiciste, invalida inmediatamente esas keys
-- Usa variables de entorno del sistema si trabajas en servidores
+## Dependencias relacionadas
 
-## Verificación
+Para cargar `.env.local`, el repo usa `python-dotenv`.
 
-Para verificar que las credenciales se cargan correctamente:
+Instalación recomendada:
 
 ```bash
-cd Scripts/
-python3 -c "import os; print(f'YouTube: {os.getenv(\"YOUTUBE_API_KEY\", \"NO ENCONTRADO\")}'); print(f'Apify: {os.getenv(\"APIFY_TOKEN\", \"NO ENCONTRADO\")}')"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+playwright install chromium
 ```
 
-## Dependencias
+## Resumen operativo
 
-Este sistema requiere `python-dotenv`:
-
-```bash
-pip install python-dotenv
-```
-
-Ya está incluido en `requirements.txt`.
-
-## Preguntas Frecuentes
-
-**¿Qué pasa si .env.local no existe?**
-- El orquestador fallará si necesita las credenciales
-- Copia `.env.example` a `.env.local` y llena los valores
-
-**¿Puedo usar variables de entorno del sistema?**
-- Sí, si `.env.local` no existe, usa `$YOUTUBE_API_KEY` y `$APIFY_TOKEN`
-- Prioridad: `.env.local` > variables de sistema
-
-**¿Cómo uso esto en un servidor?**
-- NO copies `.env.local` al servidor (eso es inseguro)
-- En su lugar, configura las variables en el entorno:
-  ```bash
-  export YOUTUBE_API_KEY="..."
-  export APIFY_TOKEN="..."
-  python3 Scripts/00_orquestador_general.py
-  ```
-
-**¿Las credenciales se logging o se guardan en logs?**
-- No, se pasan directamente como variables de entorno
-- Los extractores las usan sin imprimirlas
+- Si vas a correr `1`: necesitas `YOUTUBE_API_KEY`
+- Si vas a correr `2`: necesitas `state/x_state.json`
+- Si vas a correr `4` o `5`: necesitas `APIFY_TOKEN`
+- Si vas a correr `7` o `10`: necesitas `CLAUDE_API_KEY`
+- Si corres `all`: necesitas todo lo anterior
