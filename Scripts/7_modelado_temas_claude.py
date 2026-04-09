@@ -64,7 +64,7 @@ def valid_date(value: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Combina los materiales de Datos, los envia a Claude y genera salidas semanales para Tampico"
+        description="Combina los materiales de Datos, los envia a Claude y genera salidas semanales para CDMX"
     )
     parser.add_argument("--since", required=True, type=valid_date,
                         help="Fecha inicio YYYY-MM-DD (define la semana ISO)")
@@ -183,21 +183,21 @@ def build_prompt(since: str) -> str:
     month_label = MONTH_NAMES[dt.month]
     year_label = dt.year
     return f"""
-Analiza este corpus de conversación digital sobre TAMPICO, enfocándote específicamente en:
-- Gestión del Gobierno Municipal de Tampico
-- Acciones, decisiones y declaraciones de Mónica Villarreal Anaya, presidenta municipal de Tampico
-- Políticas públicas, servicios urbanos e intervención municipal en Tampico (alumbrado, limpieza, seguridad, turismo, cultura, protección civil, infraestructura, movilidad y mantenimiento urbano)
-- Percepción ciudadana sobre el gobierno municipal, sus funcionarios, programas y resultados
-- Problemáticas, sucesos y debates propios de Tampico y su zona inmediata cuando afecten directamente al municipio
+Analiza este corpus de conversación digital sobre la CIUDAD DE MÉXICO (CDMX). Este es un ANÁLISIS DE PERCEPCIONES: tu objetivo es identificar cómo perciben los ciudadanos, medios y actores sociales los temas relacionados con el gobierno y la vida pública de la capital. Enfócate específicamente en:
+- Percepciones sobre la gestión del Gobierno de la Ciudad de México
+- Percepciones sobre las acciones, decisiones y declaraciones de Clara Brugada, Jefa de Gobierno de la CDMX
+- Percepciones ciudadanas sobre políticas públicas, servicios urbanos e intervención del gobierno capitalino (transporte, seguridad, agua, medio ambiente, movilidad, infraestructura, cultura, protección civil y mantenimiento urbano)
+- Sentimiento y opinión ciudadana sobre el desempeño del gobierno, sus funcionarios, programas y resultados
+- Percepciones sobre problemáticas, sucesos y debates propios de la CDMX y su zona metropolitana cuando afecten directamente a la capital
 
-Genera un análisis temático con el siguiente formato EXACTO:
+Genera un análisis de percepciones con el siguiente formato EXACTO:
 
-## ANÁLISIS TEMÁTICO DE LA CONVERSACIÓN DIGITAL SOBRE TAMPICO Y SU GOBIERNO MUNICIPAL - {month_label} DE {year_label}
+## ANÁLISIS DE PERCEPCIONES DE LA CONVERSACIÓN DIGITAL SOBRE LA CDMX Y SU GOBIERNO - {month_label} DE {year_label}
 
-### TEMAS PRINCIPALES (Narrativa descriptiva de los 8 temas más relevantes sobre Tampico y su gobierno municipal):
+### TEMAS PRINCIPALES (Narrativa descriptiva de los 8 temas más relevantes sobre las percepciones en torno a la CDMX y su gobierno):
 
 **1. [NOMBRE DEL TEMA EN MAYÚSCULAS]**
-[Párrafo descriptivo de MÁXIMO 4 líneas (5 líneas máximo absoluto). Enfócate en acciones del gobierno municipal de Tampico, reacciones ciudadanas, debate público, cuestionamientos, respaldos o controversias específicas.]
+[Párrafo descriptivo de MÁXIMO 4 líneas (5 líneas máximo absoluto). Enfócate en las percepciones ciudadanas sobre las acciones del gobierno de la CDMX, reacciones de la opinión pública, debates, cuestionamientos, respaldos o controversias específicas.]
 
 **2. [NOMBRE DEL TEMA EN MAYÚSCULAS]**
 [Párrafo descriptivo de MÁXIMO 4 líneas (5 líneas máximo absoluto).]
@@ -222,31 +222,31 @@ Genera un análisis temático con el siguiente formato EXACTO:
 
 ---
 
-## ESTIMADO DE PESOS PORCENTUALES
+## PESO DE LAS NARRATIVAS PÚBLICAS SOBRE EL GOBIERNO DE LA CDMX
 
 **1. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **2. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **3. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **4. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **5. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **6. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **7. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **8. [TEMA EN MAYÚSCULAS] - XX.X%**
-XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
+[Descripción breve de 10-15 palabras en una sola línea]
 
 **RESTRICCIONES ESTRICTAS DE FORMATO:**
 - Cada narrativa de tema: MÁXIMO 4 líneas de texto, absolutamente no más de 5 líneas
@@ -257,21 +257,21 @@ XXX menciones - [Descripción breve de 10-15 palabras en una sola línea]
 - NO incluyas categoría "Otros temas" o similar
 - Formato sin tabla, solo lista numerada con formato:
   **N. TEMA - XX.X%**
-  XXX menciones - Descripción
+  Descripción de la narrativa pública
 
 **CRITERIOS DE CONTENIDO:**
 - Identifica EXACTAMENTE 8 temas principales que cubran todo el corpus
-- PRIORIZA temas relacionados con:
-  * Gestión y decisiones del Gobierno Municipal de Tampico
-  * Acciones, declaraciones y programas de Mónica Villarreal Anaya y su administración
-  * Servicios públicos municipales (alumbrado, limpieza, bacheo, mantenimiento urbano, protección civil, turismo, cultura, seguridad y atención ciudadana)
-  * Infraestructura y desarrollo urbano de Tampico
-  * Percepción ciudadana sobre el desempeño del Ayuntamiento de Tampico
-- Si aparecen actores estatales o federales, inclúyelos solo cuando impacten directamente la conversación sobre Tampico
+- PRIORIZA las percepciones ciudadanas relacionadas con:
+  * Gestión y decisiones del Gobierno de la Ciudad de México
+  * Acciones, declaraciones y programas de Clara Brugada y su administración
+  * Servicios públicos de la capital (transporte, agua, seguridad, movilidad, medio ambiente, infraestructura, cultura, protección civil y atención ciudadana)
+  * Infraestructura, desarrollo urbano y obras públicas en la CDMX
+  * Percepción y sentimiento ciudadano sobre el desempeño del Gobierno de la CDMX
+- Si aparecen actores federales o de alcaldías, inclúyelos solo cuando impacten directamente la percepción pública sobre la CDMX
 - Usa lenguaje técnico pero accesible para tomadores de decisiones
-- Categoriza por temática específica de Tampico y su gobierno municipal, no por sentimiento general
-- Las menciones deben ser números reales estimados del corpus
-- Ignora conversaciones ajenas a Tampico o que no tengan impacto claro en la agenda municipal
+- Categoriza por temática específica de la CDMX y las percepciones sobre su gobierno, no por sentimiento general
+- Los porcentajes representan el peso relativo de cada narrativa pública en la conversación digital sobre el gobierno de la CDMX
+- Ignora conversaciones ajenas a la CDMX o que no tengan impacto claro en la percepción sobre la agenda capitalina
 """.strip()
 
 
@@ -346,7 +346,7 @@ def main() -> None:
     claude_dir = weekly_output_dir(output_dir, args.since)
     claude_tag = build_report_tag(args.since, "Claude")
 
-    log_message("🤖 ANÁLISIS TEMÁTICO CON CLAUDE PARA TAMPICO")
+    log_message("🤖 ANÁLISIS DE PERCEPCIONES CON CLAUDE PARA CDMX")
     log_message(f"Semana de datos: {datos_dir}")
     log_message(f"Salida Claude: {claude_dir}")
 

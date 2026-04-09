@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # Cargar variables de entorno desde .env.local
@@ -47,6 +47,8 @@ SCRIPTS_DIR = REPO_ROOT / "Scripts"
 
 _today_iso = date.today().isocalendar()
 DEFAULT_GLOBAL_ISO_WEEK = f"{_today_iso.year}-W{_today_iso.week:02d}"
+DEFAULT_GLOBAL_SINCE = date.fromisocalendar(_today_iso.year, _today_iso.week, 1).isoformat()
+DEFAULT_GLOBAL_BEFORE = date.fromisocalendar(_today_iso.year, _today_iso.week, 7).isoformat()
 
 # Usar configuración centralizada (desde queries_config.py)
 DEFAULT_YOUTUBE_CHANNELS = YOUTUBE_CHANNELS
@@ -75,6 +77,7 @@ PIPELINES = [
     PipelineSpec("7", "claude_nlp", "Modelado Tematico con Claude", "7_modelado_temas_claude.py"),
     PipelineSpec("8", "influencia_temas", "Analisis de Influencia de Temas", "8_influencia_temas.py"),
     PipelineSpec("9", "temas_guiados", "Analisis de Temas Guiados", "9_temas_guiados.py"),
+    PipelineSpec("10", "publicaciones_institucionales_claude", "Analisis de Publicaciones Institucionales con Claude", "10_publicaciones_institucionales_claude.py"),
 ]
 
 PIPELINES_BY_CODE = {item.code: item for item in PIPELINES}
@@ -163,7 +166,7 @@ def prompt_list(label: str, default: list[str] | None = None, allow_blank: bool 
 def parse_pipeline_selection(raw: str) -> list[PipelineSpec]:
     lowered = raw.strip().lower()
     if lowered in {"all", "todos", "*"}:
-        return PIPELINES
+        return list(PIPELINES)
 
     selected: list[PipelineSpec] = []
     seen: set[str] = set()
@@ -179,6 +182,54 @@ def parse_pipeline_selection(raw: str) -> list[PipelineSpec]:
             seen.add(spec.code)
     if not selected:
         raise ValueError("No se seleccionó ningún pipeline.")
+    return selected
+
+
+def find_selected_index(selected: list[PipelineSpec], code: str) -> int | None:
+    for index, item in enumerate(selected):
+        if item.code == code:
+            return index
+    return None
+
+
+def ensure_pipeline_before(selected: list[PipelineSpec], before_code: str, after_code: str) -> list[PipelineSpec]:
+    before_idx = find_selected_index(selected, before_code)
+    after_idx = find_selected_index(selected, after_code)
+    if before_idx is None or after_idx is None:
+        return selected
+    if before_idx < after_idx:
+        return selected
+
+    item = selected.pop(before_idx)
+    after_idx = find_selected_index(selected, after_code)
+    insert_at = after_idx if after_idx is not None else len(selected)
+    selected.insert(insert_at, item)
+    return selected
+
+
+def ensure_pipeline_after(selected: list[PipelineSpec], target_code: str, dependency_codes: list[str]) -> list[PipelineSpec]:
+    target_idx = find_selected_index(selected, target_code)
+    if target_idx is None:
+        return selected
+
+    dependency_indexes = [
+        index for code in dependency_codes
+        if (index := find_selected_index(selected, code)) is not None
+    ]
+    if not dependency_indexes:
+        return selected
+
+    desired_idx = max(dependency_indexes) + 1
+    if target_idx >= desired_idx:
+        return selected
+
+    item = selected.pop(target_idx)
+    dependency_indexes = [
+        index for code in dependency_codes
+        if (index := find_selected_index(selected, code)) is not None
+    ]
+    desired_idx = max(dependency_indexes) + 1 if dependency_indexes else len(selected)
+    selected.insert(desired_idx, item)
     return selected
 
 
@@ -218,14 +269,43 @@ def iso_week_to_range(value: str) -> tuple[str, str]:
     return since.isoformat(), before.isoformat()
 
 
+def parse_date_range(since: str, before: str) -> tuple[str, str]:
+    try:
+        since_date = datetime.strptime((since or "").strip(), "%Y-%m-%d").date()
+        before_date = datetime.strptime((before or "").strip(), "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("Formato inválido. Usa YYYY-MM-DD.") from exc
+    if since_date > before_date:
+        raise ValueError("La fecha since no puede ser mayor que before.")
+    return since_date.isoformat(), before_date.isoformat()
+
+
 def prompt_common_context() -> tuple[str, str]:
-    print("\n📅 Semana global")
+    print("\n📅 Contexto temporal")
+    print("1) Semana ISO")
+    print("   - Capturas una semana en formato YYYY-Www")
+    print("   - El orquestador convierte automáticamente a since/before")
+    print("2) Rango explícito since/before")
+    print("   - Capturas fechas exactas en formato YYYY-MM-DD")
+    print("   - La lógica semanal de carpetas y nombres sigue tomando la semana ISO de since")
+
+    date_mode = prompt_choice("Selecciona formato de fechas", ["1", "2"], "1")
+
+    if date_mode == "1":
+        while True:
+            iso_week = prompt_text("Semana ISO (YYYY-Www)", default=DEFAULT_GLOBAL_ISO_WEEK)
+            try:
+                return iso_week_to_range(iso_week)
+            except (ValueError, TypeError):
+                print("⚠️ Formato inválido. Usa YYYY-Www, por ejemplo 2026-W14")
+
     while True:
-        iso_week = prompt_text("Semana ISO (YYYY-Www)", default=DEFAULT_GLOBAL_ISO_WEEK)
+        since = prompt_text("Fecha since (YYYY-MM-DD)", default=DEFAULT_GLOBAL_SINCE)
+        before = prompt_text("Fecha before (YYYY-MM-DD)", default=DEFAULT_GLOBAL_BEFORE)
         try:
-            return iso_week_to_range(iso_week)
-        except (ValueError, TypeError):
-            print("⚠️ Formato inválido. Usa YYYY-Www, por ejemplo 2026-W14")
+            return parse_date_range(since, before)
+        except ValueError as exc:
+            print(f"⚠️ {exc}")
 
 
 def prompt_execution_mode() -> str:
@@ -612,6 +692,48 @@ def build_temas_guiados(since: str, before: str, use_defaults: bool = False) -> 
     return cmd, {}
 
 
+def build_publicaciones_institucionales_claude(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    if use_defaults:
+        twitter_dir = str(REPO_ROOT / "Twitter")
+        facebook_dir = str(REPO_ROOT / "Facebook")
+        youtube_dir = str(REPO_ROOT / "Youtube")
+        datos_dir = str(REPO_ROOT / "Datos")
+        output_dir = str(REPO_ROOT / "Claude")
+        model = "claude-opus-4-6"
+        max_corpus_chars = 500000
+        claude_api_key = ""
+    else:
+        print("\n=== Analisis de Publicaciones Institucionales con Claude ===")
+        twitter_dir = prompt_text("Directorio base de Twitter", str(REPO_ROOT / "Twitter"))
+        facebook_dir = prompt_text("Directorio base de Facebook", str(REPO_ROOT / "Facebook"))
+        youtube_dir = prompt_text("Directorio base de YouTube", str(REPO_ROOT / "Youtube"))
+        datos_dir = prompt_text("Directorio base de Datos", str(REPO_ROOT / "Datos"))
+        output_dir = prompt_text("Directorio base de salida (Claude)", str(REPO_ROOT / "Claude"))
+        model = prompt_text("Modelo Claude", "claude-opus-4-6")
+        max_corpus_chars = prompt_int("Maximo de caracteres a enviar", 500000)
+        claude_api_key = prompt_secret("Claude API key", "CLAUDE_API_KEY", required=True)
+
+    env = {}
+    if not use_defaults and claude_api_key:
+        if claude_api_key != os.getenv("CLAUDE_API_KEY", ""):
+            env["CLAUDE_API_KEY"] = claude_api_key
+
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "10_publicaciones_institucionales_claude.py"),
+        "--since", since,
+        "--before", before,
+        "--twitter-dir", twitter_dir,
+        "--facebook-dir", facebook_dir,
+        "--youtube-dir", youtube_dir,
+        "--datos-dir", datos_dir,
+        "--output-dir", output_dir,
+        "--model", model,
+        "--max-corpus-chars", str(max_corpus_chars),
+    ]
+    return cmd, env
+
+
 def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bool = False, facebook_posts_csv: str = "") -> tuple[list[str], dict[str, str]]:
     if spec.key == "youtube":
         return build_youtube(since, before, use_defaults)
@@ -640,6 +762,8 @@ def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bo
         return build_influencia_temas(since, before, use_defaults)
     if spec.key == "temas_guiados":
         return build_temas_guiados(since, before, use_defaults)
+    if spec.key == "publicaciones_institucionales_claude":
+        return build_publicaciones_institucionales_claude(since, before, use_defaults)
     raise ValueError(f"Pipeline no soportado: {spec.key}")
 
 
@@ -665,6 +789,7 @@ def _source_label_for_spec(spec: PipelineSpec) -> str | None:
         "claude_nlp": "Claude",
         "influencia_temas": "Influencia_Temas",
         "temas_guiados": "Temas_Guiados",
+        "publicaciones_institucionales_claude": "Claude",
     }
     return labels.get(spec.key)
 
@@ -720,8 +845,12 @@ def main() -> None:
         print("\n⚠️  El extractor 5 (Comentarios) requiere el CSV de posts del 4 (Facebook Posts).")
         print("   Se ejecutará automáticamente el 4 primero.")
         facebook_posts_spec = PIPELINES_BY_CODE["4"]
-        selected = [s for s in selected if s.code != "4"]  # Remover duplicados si existe
-        selected.insert(0, facebook_posts_spec)  # Agregar al inicio
+        insert_at = next((index for index, item in enumerate(selected) if item.code == "5"), 0)
+        selected = [s for s in selected if s.code != "4"]
+        selected.insert(insert_at, facebook_posts_spec)
+
+    # Si 4 y 5 están seleccionados en cualquier orden, forzar 4 antes de 5.
+    selected = ensure_pipeline_before(selected, "4", "5")
 
     required_by_consolidador = {
         "7": "Claude",
@@ -745,6 +874,10 @@ def main() -> None:
                 consolidador_spec = selected.pop(index_6)
                 index_dep = next(index for index, item in enumerate(selected) if item.code == dependent_code)
                 selected.insert(index_dep, consolidador_spec)
+
+    # Si 10 se selecciona junto con extractores que producen sus insumos frescos,
+    # se ejecuta después de ellos para evitar usar material viejo o inexistente.
+    selected = ensure_pipeline_after(selected, "10", ["1", "2", "4"])
     
     # 4️⃣ PASO 4: Configurar según modo
     facebook_posts_csv = ""  # CSV generado por el extractor de posts
