@@ -4,7 +4,7 @@ Este documento resume, script por script, qué argumentos conviene pedir desde e
 
 ## Convención de nombres
 
-- `00_orquestador_general.py`
+- `orquestador_general.py`
 - `1_extractors_youtube.py`
 - `2_extractors_twitter.py`
 - `3_extractors_medios.py`
@@ -249,7 +249,7 @@ La ejecución se hace con CLI explícita y, cuando aplica, con `--no-prompt`. La
 
 ## Dependencias y reordenamientos automáticos
 
-Reglas implementadas por `00_orquestador_general.py`:
+Reglas implementadas por `orquestador_general.py`:
 
 - Si se selecciona `5` sin `4`, el orquestador inserta `4` antes de `5`.
 - Si se seleccionan `4` y `5` en cualquier orden, el orquestador fuerza `4` antes de `5`.

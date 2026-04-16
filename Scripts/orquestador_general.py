@@ -22,13 +22,31 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # Cargar variables de entorno desde .env.local
+def manual_load_dotenv(path):
+    try:
+        if not path.exists():
+            return False
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip().strip("'").strip('"')
+                    os.environ[key] = value
+        return True
+    except Exception:
+        return False
+
+env_file = Path(__file__).resolve().parent.parent / ".env.local"
 try:
     from dotenv import load_dotenv
-    env_file = Path(__file__).resolve().parent.parent / ".env.local"
     if env_file.exists():
         load_dotenv(str(env_file))
 except ImportError:
-    pass  # dotenv no está instalado, usar variables de entorno del sistema
+    manual_load_dotenv(env_file)
 
 # Importar configuración centralizada de queries
 from queries_config import (
@@ -332,7 +350,7 @@ def prompt_execution_mode() -> str:
     return "per_network" if mode == "1" else "all_networks"
 
 
-def build_youtube(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+def build_youtube(since: str, before: str, use_defaults: bool = False, api_key: str = "") -> tuple[list[str], dict[str, str]]:
     if use_defaults:
         # MODO GENÉRICO: usar parámetros por defecto
         mode = "ambos"
@@ -343,7 +361,6 @@ def build_youtube(since: str, before: str, use_defaults: bool = False) -> tuple[
         output_dir = str(REPO_ROOT / "Youtube")
         proxy_http = ""
         proxy_https = ""
-        api_key = ""
     else:
         # MODO ESPECÍFICO: preguntar parámetros
         print("\n=== YouTube ===")
@@ -364,16 +381,21 @@ def build_youtube(since: str, before: str, use_defaults: bool = False) -> tuple[
 
     env = {}
     
-    # En modo específico, usar token del prompt; en modo genérico, solo si existe en env
-    if not use_defaults and api_key:
-        if api_key != os.getenv("YOUTUBE_API_KEY", ""):
-            env["YOUTUBE_API_KEY"] = api_key
+    # En modo específico, usar token del prompt; en modo genérico o si no se capturó, usar el del entorno
+    effective_api_key = api_key if api_key else os.getenv("YOUTUBE_API_KEY", "")
+    
+    # Si sigue vacío, buscar manual en .env.local por si acaso
+    if not effective_api_key:
+        env_file = REPO_ROOT / ".env.local"
+        if env_file.exists():
+            with open(env_file, "r") as f:
+                for line in f:
+                    if "YOUTUBE_API_KEY=" in line:
+                        effective_api_key = line.split("=", 1)[1].strip().strip("'").strip('"')
+                        break
 
-    if not use_defaults:
-        if proxy_http:
-            env["YT_PROXY_HTTP"] = proxy_http
-        if proxy_https:
-            env["YT_PROXY_HTTPS"] = proxy_https
+    if effective_api_key:
+        env["YOUTUBE_API_KEY"] = effective_api_key
 
     cmd = [
         sys.executable,
@@ -386,17 +408,29 @@ def build_youtube(since: str, before: str, use_defaults: bool = False) -> tuple[
         "--max-videos-query", str(max_videos_query),
         "--max-videos-channel", str(max_videos_channel),
     ]
+    if effective_api_key:
+        cmd.extend(["--api-key", effective_api_key])
     append_many(cmd, "--channels", channels)
     append_many(cmd, "--queries", queries)
     return cmd, env
 
 
 def build_twitter(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    env = {}
     if use_defaults:
         # MODO GENÉRICO: usar parámetros por defecto
         queries = []  # Usa defaults del script
         output_dir = str(REPO_ROOT / "Twitter")
         state_path = str(REPO_ROOT / "state" / "x_state.json")
+        
+        # Validar existencia de x_state.json
+        if not Path(state_path).exists():
+            # Si no existe en la ruta estándar, intentamos buscarlo relativo al directorio actual de ejecución
+            # por si el orquestador se lanzó desde otro lugar.
+            alt_path = Path("state/x_state.json")
+            if alt_path.exists():
+                state_path = str(alt_path.absolute())
+
         max_tweets = 3000
         max_replies = 200
         max_reply_scrolls = 8
@@ -428,7 +462,7 @@ def build_twitter(since: str, before: str, use_defaults: bool = False) -> tuple[
         cmd.append("--no-headless")
     for query in queries:
         cmd.extend(["--query", query])
-    return cmd, {}
+    return cmd, env
 
 
 def build_medios(
@@ -441,6 +475,7 @@ def build_medios(
     before: str,
     use_defaults: bool = False,
 ) -> tuple[list[str], dict[str, str]]:
+    env = {}
     if use_defaults:
         # MODO GENÉRICO: usar parámetros por defecto
         medios = DEFAULT_MEDIOS_SITES
@@ -482,13 +517,14 @@ def build_medios(
         cmd.append("--omitir-semanas-existentes")
     else:
         cmd.append("--no-omitir-semanas-existentes")
-    return cmd, {}
+    return cmd, env
 
 
-def build_facebook_posts(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+def build_facebook_posts(since: str, before: str, use_defaults: bool = False, apify_token: str = "") -> tuple[list[str], dict[str, str]]:
     """
     Fase 1: Descarga posts de Facebook (incluye post_url en salida).
     """
+    env = {}
     if use_defaults:
         pages = DEFAULT_FB_PAGES
         output_dir = str(REPO_ROOT / "Facebook")
@@ -497,7 +533,6 @@ def build_facebook_posts(since: str, before: str, use_defaults: bool = False) ->
         sample_percent = None
         sample_seed = 42
         batch_size = 10
-        apify_token = ""
     else:
         print("\n=== Facebook Posts (incluye URL) ===")
         pages = prompt_list("Páginas target separadas por coma", DEFAULT_FB_PAGES)
@@ -506,13 +541,21 @@ def build_facebook_posts(since: str, before: str, use_defaults: bool = False) ->
         max_urls = prompt_int("Máximo de páginas target (opcional)", allow_blank=True)
         sample_percent = prompt_float("Sampling % de páginas (opcional)", allow_blank=True)
         sample_seed = prompt_int("Semilla de sampling", 42)
-        batch_size = prompt_int("Batch size", 10)
-        apify_token = prompt_secret("Apify token", "APIFY_TOKEN", required=True)
+        batch_size = prompt_int("Batch size en Apify", 10)
+    effective_token = apify_token if apify_token else os.getenv("APIFY_TOKEN", "")
 
-    env = {}
-    if not use_defaults and apify_token:
-        if apify_token != os.getenv("APIFY_TOKEN", ""):
-            env["APIFY_TOKEN"] = apify_token
+    # Si sigue vacío, buscar manual en .env.local por si acaso
+    if not effective_token:
+        env_file = REPO_ROOT / ".env.local"
+        if env_file.exists():
+            with open(env_file, "r") as f:
+                for line in f:
+                    if "APIFY_TOKEN=" in line:
+                        effective_token = line.split("=", 1)[1].strip().strip("'").strip('"')
+                        break
+
+    if effective_token:
+        env["APIFY_TOKEN"] = effective_token
 
     cmd = [
         sys.executable,
@@ -525,17 +568,20 @@ def build_facebook_posts(since: str, before: str, use_defaults: bool = False) ->
         "--batch-size", str(batch_size),
         "--no-prompt",
     ]
+    if effective_token:
+        cmd.extend(["--token", effective_token])
     append_many(cmd, "--pages", pages)
     append_optional(cmd, "--max-urls", max_urls)
     append_optional(cmd, "--sample-percent", sample_percent)
     return cmd, env
 
 
-def build_facebook_comentarios(since: str, before: str, use_defaults: bool = False, input_csv: str = "") -> tuple[list[str], dict[str, str]]:
+def build_facebook_comentarios(since: str, before: str, use_defaults: bool = False, input_csv: str = "", apify_token: str = "") -> tuple[list[str], dict[str, str]]:
     """
     Fase 2: Descarga SOLO comentarios desde posts de Facebook.
     Requiere: CSV generado por build_facebook_posts().
     """
+    env = {}
     if use_defaults:
         # MODO GENÉRICO: usar parámetros por defecto
         output_dir = str(REPO_ROOT / "Facebook")
@@ -544,7 +590,6 @@ def build_facebook_comentarios(since: str, before: str, use_defaults: bool = Fal
         sample_percent = None
         sample_seed = 42
         batch_size = 25
-        apify_token = ""
     else:
         # MODO ESPECÍFICO: preguntar parámetros
         print("\n=== Facebook Comentarios (desde posts) ===")
@@ -555,11 +600,20 @@ def build_facebook_comentarios(since: str, before: str, use_defaults: bool = Fal
         sample_seed = prompt_int("Semilla de sampling", 42)
         batch_size = prompt_int("Batch size en Apify", 25)
         apify_token = prompt_secret("Apify token", "APIFY_TOKEN", required=True)
+    effective_token = apify_token if apify_token else os.getenv("APIFY_TOKEN", "")
 
-    env = {}
-    if not use_defaults and apify_token:
-        if apify_token != os.getenv("APIFY_TOKEN", ""):
-            env["APIFY_TOKEN"] = apify_token
+    # Si sigue vacío, buscar manual en .env.local por si acaso
+    if not effective_token:
+        env_file = REPO_ROOT / ".env.local"
+        if env_file.exists():
+            with open(env_file, "r") as f:
+                for line in f:
+                    if "APIFY_TOKEN=" in line:
+                        effective_token = line.split("=", 1)[1].strip().strip("'").strip('"')
+                        break
+
+    if effective_token:
+        env["APIFY_TOKEN"] = effective_token
 
     cmd = [
         sys.executable,
@@ -572,6 +626,16 @@ def build_facebook_comentarios(since: str, before: str, use_defaults: bool = Fal
         "--batch-size", str(batch_size),
         "--no-prompt",
     ]
+    if effective_token:
+        cmd.extend(["--token", effective_token])
+    
+    # Auto-detección del CSV si no se provee
+    if not input_csv:
+        report_tag = build_report_tag(since, "Facebook")
+        potencial_csv = REPO_ROOT / "Facebook" / report_tag / f"{report_tag}_posts.csv"
+        if potencial_csv.exists():
+            input_csv = str(potencial_csv)
+
     if input_csv:
         cmd.extend(["--input-csv", input_csv])
     append_optional(cmd, "--max-urls", max_urls)
@@ -580,6 +644,7 @@ def build_facebook_comentarios(since: str, before: str, use_defaults: bool = Fal
 
 
 def build_consolidador_datos(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    env = {}
     if use_defaults:
         base_dir = str(REPO_ROOT)
         output_dir = str(REPO_ROOT / "Datos")
@@ -596,16 +661,15 @@ def build_consolidador_datos(since: str, before: str, use_defaults: bool = False
         "--base-dir", base_dir,
         "--output-dir", output_dir,
     ]
-    return cmd, {}
+    return cmd, env
 
 
-def build_claude_nlp(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+def build_claude_nlp(since: str, before: str, use_defaults: bool = False, claude_api_key: str = "") -> tuple[list[str], dict[str, str]]:
     if use_defaults:
         input_dir = str(REPO_ROOT / "Datos")
         output_dir = str(REPO_ROOT / "Claude")
         model = "claude-opus-4-6"
         max_corpus_chars = 650000
-        claude_api_key = ""
     else:
         print("\n=== Modelado Tematico con Claude ===")
         input_dir = prompt_text("Directorio base de entrada (Datos)", str(REPO_ROOT / "Datos"))
@@ -615,9 +679,20 @@ def build_claude_nlp(since: str, before: str, use_defaults: bool = False) -> tup
         claude_api_key = prompt_secret("Claude API key", "CLAUDE_API_KEY", required=True)
 
     env = {}
-    if not use_defaults and claude_api_key:
-        if claude_api_key != os.getenv("CLAUDE_API_KEY", ""):
-            env["CLAUDE_API_KEY"] = claude_api_key
+    effective_key = claude_api_key if claude_api_key else os.getenv("CLAUDE_API_KEY", "")
+
+    # Si sigue vacío, buscar manual en .env.local por si acaso
+    if not effective_key:
+        env_file = REPO_ROOT / ".env.local"
+        if env_file.exists():
+            with open(env_file, "r") as f:
+                for line in f:
+                    if "CLAUDE_API_KEY=" in line:
+                        effective_key = line.split("=", 1)[1].strip().strip("'").strip('"')
+                        break
+
+    if effective_key:
+        env["CLAUDE_API_KEY"] = effective_key
 
     cmd = [
         sys.executable,
@@ -633,6 +708,7 @@ def build_claude_nlp(since: str, before: str, use_defaults: bool = False) -> tup
 
 
 def build_influencia_temas(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    env = {}
     if use_defaults:
         input_dir = str(REPO_ROOT / "Datos")
         output_dir = str(REPO_ROOT / "Influencia_Temas")
@@ -655,10 +731,11 @@ def build_influencia_temas(since: str, before: str, use_defaults: bool = False) 
         "--output-dir", output_dir,
         "--stopwords-path", stopwords_path,
     ]
-    return cmd, {}
+    return cmd, env
 
 
 def build_temas_guiados(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+    env = {}
     if use_defaults:
         input_dir = str(REPO_ROOT / "Datos")
         output_dir = str(REPO_ROOT / "Temas_Guiados")
@@ -689,10 +766,10 @@ def build_temas_guiados(since: str, before: str, use_defaults: bool = False) -> 
     ]
     if input_file:
         cmd.extend(["--input-file", input_file])
-    return cmd, {}
+    return cmd, env
 
 
-def build_publicaciones_institucionales_claude(since: str, before: str, use_defaults: bool = False) -> tuple[list[str], dict[str, str]]:
+def build_publicaciones_institucionales_claude(since: str, before: str, use_defaults: bool = False, claude_api_key: str = "") -> tuple[list[str], dict[str, str]]:
     if use_defaults:
         twitter_dir = str(REPO_ROOT / "Twitter")
         facebook_dir = str(REPO_ROOT / "Facebook")
@@ -701,7 +778,6 @@ def build_publicaciones_institucionales_claude(since: str, before: str, use_defa
         output_dir = str(REPO_ROOT / "Claude")
         model = "claude-opus-4-6"
         max_corpus_chars = 500000
-        claude_api_key = ""
     else:
         print("\n=== Analisis de Publicaciones Institucionales con Claude ===")
         twitter_dir = prompt_text("Directorio base de Twitter", str(REPO_ROOT / "Twitter"))
@@ -714,9 +790,20 @@ def build_publicaciones_institucionales_claude(since: str, before: str, use_defa
         claude_api_key = prompt_secret("Claude API key", "CLAUDE_API_KEY", required=True)
 
     env = {}
-    if not use_defaults and claude_api_key:
-        if claude_api_key != os.getenv("CLAUDE_API_KEY", ""):
-            env["CLAUDE_API_KEY"] = claude_api_key
+    effective_key = claude_api_key if claude_api_key else os.getenv("CLAUDE_API_KEY", "")
+
+    # Si sigue vacío, buscar manual en .env.local por si acaso
+    if not effective_key:
+        env_file = REPO_ROOT / ".env.local"
+        if env_file.exists():
+            with open(env_file, "r") as f:
+                for line in f:
+                    if "CLAUDE_API_KEY=" in line:
+                        effective_key = line.split("=", 1)[1].strip().strip("'").strip('"')
+                        break
+
+    if effective_key:
+        env["CLAUDE_API_KEY"] = effective_key
 
     cmd = [
         sys.executable,
@@ -734,9 +821,9 @@ def build_publicaciones_institucionales_claude(since: str, before: str, use_defa
     return cmd, env
 
 
-def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bool = False, facebook_posts_csv: str = "") -> tuple[list[str], dict[str, str]]:
+def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bool = False, facebook_posts_csv: str = "", api_key: str = "", apify_token: str = "", claude_api_key: str = "") -> tuple[list[str], dict[str, str]]:
     if spec.key == "youtube":
-        return build_youtube(since, before, use_defaults)
+        return build_youtube(since, before, use_defaults, api_key)
     if spec.key == "twitter":
         return build_twitter(since, before, use_defaults)
     if spec.key == "medios_cdmx":
@@ -751,19 +838,19 @@ def build_pipeline(spec: PipelineSpec, since: str, before: str, use_defaults: bo
             use_defaults,
         )
     if spec.key == "facebook_posts":
-        return build_facebook_posts(since, before, use_defaults)
+        return build_facebook_posts(since, before, use_defaults, apify_token)
     if spec.key == "facebook_comentarios":
-        return build_facebook_comentarios(since, before, use_defaults, facebook_posts_csv)
+        return build_facebook_comentarios(since, before, use_defaults, facebook_posts_csv, apify_token)
     if spec.key == "consolidador_datos":
         return build_consolidador_datos(since, before, use_defaults)
     if spec.key == "claude_nlp":
-        return build_claude_nlp(since, before, use_defaults)
+        return build_claude_nlp(since, before, use_defaults, claude_api_key)
     if spec.key == "influencia_temas":
         return build_influencia_temas(since, before, use_defaults)
     if spec.key == "temas_guiados":
         return build_temas_guiados(since, before, use_defaults)
     if spec.key == "publicaciones_institucionales_claude":
-        return build_publicaciones_institucionales_claude(since, before, use_defaults)
+        return build_publicaciones_institucionales_claude(since, before, use_defaults, claude_api_key)
     raise ValueError(f"Pipeline no soportado: {spec.key}")
 
 

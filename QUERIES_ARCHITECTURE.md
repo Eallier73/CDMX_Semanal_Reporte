@@ -8,7 +8,7 @@ Guía visual de dónde se encuentran las queries y cómo se conectan los archivo
 CDMX_Semanal_Reporte/
 │
 ├── Scripts/
-│   ├── 00_orquestador_general.py  <- Importa de queries_config.py
+│   ├── orquestador_general.py  <- Importa de queries_config.py
 │   ├── queries_config.py           <- Archivo central de queries
 │   │   ├── YOUTUBE_*
 │   │   ├── TWITTER_*

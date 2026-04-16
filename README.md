@@ -38,7 +38,7 @@ Donde:
 
 ## Scripts incluidos
 
-- `Scripts/00_orquestador_general.py`
+- `Scripts/orquestador_general.py`
 - `Scripts/1_extractors_youtube.py`
 - `Scripts/2_extractors_twitter.py`
 - `Scripts/3_extractors_medios.py`
@@ -89,7 +89,7 @@ playwright install chromium
 ## Uso recomendado
 
 ```bash
-python Scripts/00_orquestador_general.py
+python Scripts/orquestador_general.py
 ```
 
 El detalle script por script de argumentos y prompts quedó en `ORQUESTADOR_ARGUMENTOS.md`.
